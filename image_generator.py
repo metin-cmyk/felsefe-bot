@@ -3,156 +3,127 @@ from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont
 import numpy as np
 
-OUTPUT_DIR = Path(“images”)
+OUTPUT_DIR = Path("images")
 OUTPUT_DIR.mkdir(exist_ok=True)
 
-LOGO_PATH      = Path(“felsefeco_logo.png”)
-FONT_BOLD_PATH = Path(“BarlowCondensed-SemiBold.ttf”)
-FONT_REG_PATH  = Path(“BarlowCondensed-Regular.ttf”)
+LOGO_PATH      = Path("felsefeco_logo.png")
+FONT_BOLD_PATH = Path("BarlowCondensed-SemiBold.ttf")
+FONT_REG_PATH  = Path("BarlowCondensed-Regular.ttf")
 
 POST_SIZE  = (1080, 1350)
 STORY_SIZE = (1080, 1920)
 
-# Pastel / orta ton paletler — (arka plan rengi, koyu mu açık mı)
-
-PALETTES = [
-{“bg”: (232, 220, 255), “dark”: True,  “accent”: (100, 60, 180)},   # Lavender
-{“bg”: (255, 228, 220), “dark”: True,  “accent”: (180, 80, 50)},    # Somon
-{“bg”: (220, 240, 255), “dark”: True,  “accent”: (50, 100, 180)},   # Buz mavisi
-{“bg”: (220, 255, 235), “dark”: True,  “accent”: (30, 130, 80)},    # Mint
-{“bg”: (255, 245, 210), “dark”: True,  “accent”: (160, 110, 20)},   # Krem
-{“bg”: (255, 220, 240), “dark”: True,  “accent”: (160, 40, 100)},   # Pembe
-{“bg”: (60,  40, 100),  “dark”: False, “accent”: (180, 150, 255)},  # Koyu mor
-{“bg”: (30,  60,  90),  “dark”: False, “accent”: (100, 180, 255)},  # Gece mavisi
-{“bg”: (50,  30,  30),  “dark”: False, “accent”: (255, 160, 100)},  # Koyu kahve
-{“bg”: (20,  60,  40),  “dark”: False, “accent”: (100, 220, 150)},  # Koyu yesil
+COLOR_PALETTES = [
+    {"bg": [(15, 10, 40), (40, 15, 80)],  "text": (255,255,255), "accent": (180,130,255)},
+    {"bg": [(10, 30, 50), (20, 60,100)],  "text": (255,255,255), "accent": (100,200,255)},
+    {"bg": [(40, 15, 15), (90, 30, 30)],  "text": (255,255,255), "accent": (255,150,100)},
+    {"bg": [(10, 40, 25), (20, 80, 50)],  "text": (255,255,255), "accent": (100,255,150)},
+    {"bg": [(40, 30, 10), (90, 70, 20)],  "text": (255,255,255), "accent": (255,220,100)},
+    {"bg": [(30, 10, 40), (70, 20, 90)],  "text": (255,255,255), "accent": (220,100,255)},
+    {"bg": [(10, 35, 45), (20, 75, 95)],  "text": (255,255,255), "accent": (80, 220,220)},
 ]
 
 def _font(size, bold=True):
-path = FONT_BOLD_PATH if bold else FONT_REG_PATH
-if path.exists():
-return ImageFont.truetype(str(path), size)
-for p in [”/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf”,
-“/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf”]:
-if Path(p).exists():
-return ImageFont.truetype(p, size)
-return ImageFont.load_default()
+    path = FONT_BOLD_PATH if bold else FONT_REG_PATH
+    if path.exists():
+        return ImageFont.truetype(str(path), size)
+    for p in ["/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+              "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"]:
+        if Path(p).exists():
+            return ImageFont.truetype(p, size)
+    return ImageFont.load_default()
 
-def _text_color(palette):
-return (30, 30, 30) if palette[“dark”] else (240, 240, 240)
+def _make_gradient_bg(size, palette):
+    w, h = size
+    c1 = np.array(palette["bg"][0], dtype=float)
+    c2 = np.array(palette["bg"][1], dtype=float)
+    arr = np.zeros((h, w, 3), dtype=np.uint8)
+    for y in range(h):
+        t = y / h
+        arr[y, :] = (c1 * (1-t) + c2 * t).astype(np.uint8)
+    return Image.fromarray(arr)
 
-def _make_bg(size, palette):
-return Image.new(“RGB”, size, palette[“bg”])
+def _add_watermark(img, palette):
+    draw = ImageDraw.Draw(img, "RGBA")
+    f_wm = _font(180, bold=True)
+    symbols = ["Sigma", "Phi", "Psi", "Lambda", "Theta", "Xi"]
+    greek   = [chr(0x03A3), chr(0x03A6), chr(0x03A8), chr(0x039B), chr(0x0398), chr(0x039E)]
+    for i in range(6):
+        sym = greek[i % len(greek)]
+        x = random.randint(50, img.width-200)
+        y = random.randint(50, img.height-200)
+        draw.text((x, y), sym, font=f_wm, fill=(255, 255, 255, 18))
+    return img
 
-def _add_subtle_texture(img, palette):
-“”“Cok hafif nokta doku — monotonlugu kirlar.”””
-arr = np.array(img).astype(float)
-noise = np.random.uniform(-8, 8, arr.shape)
-arr = np.clip(arr + noise, 0, 255).astype(np.uint8)
-return Image.fromarray(arr)
+def _add_texts(img, quote_data, palette, size):
+    w, h = size
+    draw   = ImageDraw.Draw(img)
+    quote  = quote_data.get("quote", "")
+    author = quote_data.get("author", "")
+    akim   = quote_data.get("akim", "")
+    accent = palette["accent"]
+    text_c = palette["text"]
 
-def _draw_content(img, quote_data, palette, size):
-w, h = size
-draw = ImageDraw.Draw(img)
+    # Tırnak
+    f_tirnak = _font(120, bold=True)
+    draw.text((55, 60), "\u201c", font=f_tirnak, fill=accent)
 
-```
-quote   = quote_data.get("quote", "")
-author  = quote_data.get("author", "")
-akim    = quote_data.get("akim", "")
-tc      = _text_color(palette)
-accent  = palette["accent"]
+    # Ana söz
+    f_quote = _font(72, bold=True)
+    wrapped = textwrap.fill(quote, width=42)
+    lines   = wrapped.split("\n")
+    total_h = len(lines) * 88
+    y = (h - total_h) // 2 - 60
 
-# Fontlar
-f_tirnak = _font(160, bold=True)
-f_quote  = _font(80, bold=True)
-f_author = _font(52, bold=True)
-f_akim   = _font(40, bold=False)
+    for line in lines:
+        draw.text((62, y+3), line, font=f_quote, fill=(0, 0, 0))
+        draw.text((60, y),   line, font=f_quote, fill=text_c)
+        y += 88
 
-# --- Acik tırnak (sol ust) ---
-draw.text((60, 30), '"', font=f_tirnak, fill=accent)
+    # Ayraç
+    draw.rectangle([60, y+30, 200, y+33], fill=accent)
 
-# --- Ana soz - ortali ---
-max_chars = 22
-wrapped = textwrap.fill(quote, width=max_chars)
-lines   = wrapped.split("\n")
-line_h  = 96
-total_h = len(lines) * line_h
+    # Yazar
+    f_author = _font(48, bold=True)
+    draw.text((62, y+48), "— %s" % author, font=f_author, fill=accent)
 
-# Dikey merkez - biraz yukari
-y = (h - total_h) // 2 - 80
+    # Akım
+    f_akim = _font(36, bold=False)
+    draw.text((62, y+108), akim, font=f_akim, fill=text_c)
 
-for line in lines:
-    bbox = draw.textbbox((0, 0), line, font=f_quote)
-    lw = bbox[2] - bbox[0]
-    x  = (w - lw) // 2
-    draw.text((x, y), line, font=f_quote, fill=tc)
-    y += line_h
+    # Logo
+    if LOGO_PATH.exists():
+        try:
+            logo = Image.open(LOGO_PATH).convert("RGBA")
+            logo = logo.resize((130, 130), Image.LANCZOS)
+            img.paste(logo, (w-170, h-170), logo)
+        except:
+            pass
+    else:
+        f_logo = _font(38, bold=True)
+        draw.text((w-220, h-65), "felsefe.co", font=f_logo, fill=(255,255,255))
 
-# --- Kapanıs tırnak (sag alt of quote) ---
-draw.text((w - 100, y - 20), '"', font=f_tirnak, fill=accent)
-
-# --- Ayrac ---
-line_y = y + 30
-draw.rectangle([(w//2 - 60, line_y), (w//2 + 60, line_y + 4)], fill=accent)
-
-# --- Yazar ---
-author_text = "— %s" % author
-bbox = draw.textbbox((0, 0), author_text, font=f_author)
-aw = bbox[2] - bbox[0]
-draw.text(((w - aw) // 2, line_y + 20), author_text, font=f_author, fill=accent)
-
-# --- Akim ---
-bbox = draw.textbbox((0, 0), akim, font=f_akim)
-akw = bbox[2] - bbox[0]
-draw.text(((w - akw) // 2, line_y + 85), akim, font=f_akim, fill=tc)
-
-# --- Logo ---
-_add_logo(img, draw, w, h, tc)
-
-return img
-```
-
-def _add_logo(img, draw, w, h, tc):
-logo_size = 160
-margin    = 40
-y_logo    = h - logo_size - margin
-
-```
-if LOGO_PATH.exists():
-    try:
-        logo = Image.open(LOGO_PATH).convert("RGBA")
-        logo = logo.resize((logo_size, logo_size), Image.LANCZOS)
-        x = (w - logo_size) // 2
-        img.paste(logo, (x, y_logo), logo)
-        return
-    except:
-        pass
-
-# Fallback: metin logo
-f_logo = _font(44, bold=True)
-text   = "felsefe.co"
-bbox   = draw.textbbox((0, 0), text, font=f_logo)
-lw     = bbox[2] - bbox[0]
-draw.text(((w - lw) // 2, h - 65), text, font=f_logo, fill=tc)
-```
+    return img
 
 def _make_image(size, quote_data):
-palette = random.choice(PALETTES)
-img = _make_bg(size, palette)
-img = _add_subtle_texture(img, palette)
-img = _draw_content(img, quote_data, palette, size)
-return img
+    palette = random.choice(COLOR_PALETTES)
+    img = _make_gradient_bg(size, palette)
+    img = _add_watermark(img, palette)
+    img = _add_texts(img, quote_data, palette, size)
+    return img
 
 def create_post_image(quote_data):
-img  = *make_image(POST_SIZE, quote_data)
-safe = re.sub(r”[^a-z0-9]”, “*”, quote_data[“author”].lower())[:20]
-path = OUTPUT_DIR / (“post_%s_%d.jpg” % (safe, int(time.time())))
-img.save(path, “JPEG”, quality=95)
-return path
+    img  = _make_image(POST_SIZE, quote_data)
+    safe = re.sub(r"[^a-z0-9]", "_", quote_data.get("author","x").lower())[:20]
+    filename = "post_%s_%d.jpg" % (safe, int(time.time()))
+    path = OUTPUT_DIR / filename
+    img.save(str(path), "JPEG", quality=95)
+    return path
 
 def create_story_image(quote_data):
-img  = *make_image(STORY_SIZE, quote_data)
-safe = re.sub(r”[^a-z0-9]”, “*”, quote_data[“author”].lower())[:20]
-path = OUTPUT_DIR / (“story_%s_%d.jpg” % (safe, int(time.time())))
-img.save(path, “JPEG”, quality=95)
-return path
+    img  = _make_image(STORY_SIZE, quote_data)
+    safe = re.sub(r"[^a-z0-9]", "_", quote_data.get("author","x").lower())[:20]
+    filename = "story_%s_%d.jpg" % (safe, int(time.time()))
+    path = OUTPUT_DIR / filename
+    img.save(str(path), "JPEG", quality=95)
+    return path
