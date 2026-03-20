@@ -112,8 +112,8 @@ def _poll():
                         _send_msg("Yeni icerik uretiliyor...")
                         def _regen():
                             qd = generate_quote()
-                            pi = create_post_image(qd)
-                            si = create_story_image(qd)
+                            pi, pal = create_post_image(qd)
+                            si = create_story_image(qd, pal)
                             from bot import _publish
                             send_for_approval(pi, si, qd, lambda: _publish(qd, pi, si))
                         threading.Thread(target=_regen, daemon=True).start()
@@ -133,8 +133,8 @@ def _poll():
                     _send_msg("Yeni icerik uretiliyor...")
                     def _gen():
                         qd = generate_quote()
-                        pi = create_post_image(qd)
-                        si = create_story_image(qd)
+                        pi, pal = create_post_image(qd)
+                        si = create_story_image(qd, pal)
                         from bot import _publish
                         send_for_approval(pi, si, qd, lambda: _publish(qd, pi, si))
                     threading.Thread(target=_gen, daemon=True).start()
