@@ -139,7 +139,7 @@ def create_post_image(quote_data):
     img = _add_quote_text(img, quote_data, palette, POST_SIZE)
 
     safe = re.sub(r"[^a-z0-9]", "_", quote_data["author"].lower())[:20]
-    path = OUTPUT_DIR / "post_%s_%d.jpg" % (safe, int(time.time()))
+    path = OUTPUT_DIR / ("post_%s_%d.jpg" % (safe, int(time.time())))
     img.save(path, "JPEG", quality=95)
     return path
 
@@ -150,6 +150,6 @@ def create_story_image(quote_data):
     img = _add_quote_text(img, quote_data, palette, STORY_SIZE)
 
     safe = re.sub(r"[^a-z0-9]", "_", quote_data["author"].lower())[:20]
-    path = OUTPUT_DIR / "story_%s_%d.jpg" % (safe, int(time.time()))
+    path = OUTPUT_DIR / ("story_%s_%d.jpg" % (safe, int(time.time())))
     img.save(path, "JPEG", quality=95)
     return path
