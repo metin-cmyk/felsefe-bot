@@ -8,6 +8,15 @@ OUTPUT_DIR.mkdir(exist_ok=True)
 
 LOGO_PATH = Path("felsefeco_logo.png")
 
+# Font dosyaları projenin kendi klasöründe
+BASE_DIR = Path(__file__).parent
+FONT = {
+    "bold":        BASE_DIR / "DejaVuSerif-Bold.ttf",
+    "regular":     BASE_DIR / "DejaVuSerif.ttf",
+    "italic":      BASE_DIR / "DejaVuSerif-Italic.ttf",
+    "bold_italic": BASE_DIR / "DejaVuSerif-BoldItalic.ttf",
+}
+
 POST_SIZE  = (1080, 1350)
 STORY_SIZE = (1080, 1920)
 
@@ -33,29 +42,9 @@ def _hex(h):
     return tuple(int(h[i:i+2], 16) for i in (0, 2, 4))
 
 def _font(size, style="bold"):
-    candidates = {
-        "bold": [
-            "/usr/share/fonts/truetype/liberation/LiberationSerif-Bold.ttf",
-            "/usr/share/fonts/truetype/freefont/FreeSerifBold.ttf",
-            "/usr/share/fonts/truetype/dejavu/DejaVuSerif-Bold.ttf",
-        ],
-        "regular": [
-            "/usr/share/fonts/truetype/liberation/LiberationSerif-Regular.ttf",
-            "/usr/share/fonts/truetype/freefont/FreeSerif.ttf",
-            "/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf",
-        ],
-        "italic": [
-            "/usr/share/fonts/truetype/liberation/LiberationSerif-Italic.ttf",
-            "/usr/share/fonts/truetype/freefont/FreeSerifItalic.ttf",
-            "/usr/share/fonts/truetype/dejavu/DejaVuSerif-Italic.ttf",
-        ],
-    }
-    for p in candidates.get(style, candidates["bold"]):
-        if Path(p).exists():
-            return ImageFont.truetype(p, size)
-    for p in ["/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"]:
-        if Path(p).exists():
-            return ImageFont.truetype(p, size)
+    path = FONT.get(style, FONT["bold"])
+    if path.exists():
+        return ImageFont.truetype(str(path), size)
     return ImageFont.load_default()
 
 def _make_image(size, quote_data, palette):
@@ -74,60 +63,87 @@ def _make_image(size, quote_data, palette):
 
     quoted_text = "\u201c%s\u201d" % quote
 
-    margin   = 100
-    usable_w = w - (margin * 2)
-    char_w   = 38
-    max_chars = usable_w // char_w
+    # Geniş kenar boşluğu
+    margin    = 110
+    usable_w  = w - (margin * 2)
 
-    wrapped = textwrap.fill(quoted_text, width=max_chars)
-    lines   = wrapped.split("\n")
+    # Font ve satır yüksekliği
+    f_q = _font(82, "bold")
+    lh  = 105
 
-    f_q = _font(64, "bold") if len(lines) > 5 else _font(76, "bold")
-    lh  = 86 if len(lines) > 5 else 96
+    # Satırları sar — piksel bazlı
+    words   = quoted_text.split()
+    lines   = []
+    current = ""
+    for word in words:
+        test = (current + " " + word).strip()
+        bbox = draw.textbbox((0,0), test, font=f_q)
+        if bbox[2] - bbox[0] > usable_w and current:
+            lines.append(current)
+            current = word
+        else:
+            current = test
+    if current:
+        lines.append(current)
+
+    # Çok uzunsa küçük font
+    if len(lines) > 6:
+        f_q = _font(68, "bold")
+        lh  = 88
+        lines = []
+        current = ""
+        for word in words:
+            test = (current + " " + word).strip()
+            bbox = draw.textbbox((0,0), test, font=f_q)
+            if bbox[2] - bbox[0] > usable_w and current:
+                lines.append(current)
+                current = word
+            else:
+                current = test
+        if current:
+            lines.append(current)
 
     total_h = len(lines) * lh
-    y = int(h * 0.40) - total_h // 2 - 40
+    y = int(h * 0.42) - total_h // 2
 
     for line in lines:
-        bbox = draw.textbbox((0, 0), line, font=f_q)
+        bbox = draw.textbbox((0,0), line, font=f_q)
         lw   = bbox[2] - bbox[0]
         x    = (w - lw) // 2
         draw.text((x, y), line, font=f_q, fill=text_color)
         y += lh
 
     # Ayraç
-    line_y = y + 40
-    draw.rectangle([(w//2)-60, line_y, (w//2)+60, line_y+2], fill=accent)
+    line_y = y + 45
+    draw.rectangle([(w//2)-70, line_y, (w//2)+70, line_y+2], fill=accent)
 
     # Yazar
-    f_author    = _font(54, "italic")
+    f_author    = _font(56, "italic")
     author_text = "— %s" % author
     bbox        = draw.textbbox((0,0), author_text, font=f_author)
     aw          = bbox[2] - bbox[0]
-    draw.text(((w-aw)//2, line_y+20), author_text, font=f_author, fill=accent)
+    draw.text(((w-aw)//2, line_y+22), author_text, font=f_author, fill=accent)
 
     # Akım
-    f_akim = _font(38, "regular")
+    f_akim = _font(40, "regular")
     bbox   = draw.textbbox((0,0), akim, font=f_akim)
     aw2    = bbox[2] - bbox[0]
-    draw.text(((w-aw2)//2, line_y+90), akim, font=f_akim, fill=sub_color)
+    draw.text(((w-aw2)//2, line_y+96), akim, font=f_akim, fill=sub_color)
 
-    # @felsefe.co — ortalı, h*0.88 civarında (daha yukarı)
-    f_handle = _font(44, "bold")
-    handle   = "@felsefe.co"
-    bbox     = draw.textbbox((0,0), handle, font=f_handle)
-    hw       = bbox[2] - bbox[0]
-    handle_y = int(h * 0.88)
-
+    # @felsefe.co
+    handle_y = int(h * 0.87)
     if LOGO_PATH.exists():
         try:
-            logo  = Image.open(LOGO_PATH).convert("RGBA")
-            logo  = logo.resize((90, 90), Image.LANCZOS)
-            lx    = (w - 90) // 2
-            img.paste(logo, (lx, handle_y - 110), logo)
+            logo = Image.open(LOGO_PATH).convert("RGBA")
+            logo = logo.resize((90, 90), Image.LANCZOS)
+            img.paste(logo, ((w-90)//2, handle_y - 110), logo)
         except:
             pass
 
+    f_handle = _font(46, "bold")
+    handle   = "@felsefe.co"
+    bbox     = draw.textbbox((0,0), handle, font=f_handle)
+    hw       = bbox[2] - bbox[0]
     draw.text(((w-hw)//2, handle_y), handle, font=f_handle, fill=sub_color)
 
     return img
