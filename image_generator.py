@@ -6,124 +6,146 @@ import numpy as np
 OUTPUT_DIR = Path("images")
 OUTPUT_DIR.mkdir(exist_ok=True)
 
-LOGO_PATH      = Path("felsefeco_logo.png")
-FONT_BOLD_PATH = Path("BarlowCondensed-SemiBold.ttf")
-FONT_REG_PATH  = Path("BarlowCondensed-Regular.ttf")
+LOGO_PATH = Path("felsefeco_logo.png")
 
 POST_SIZE  = (1080, 1350)
 STORY_SIZE = (1080, 1920)
 
-COLOR_PALETTES = [
-    {"bg": [(15, 10, 40), (40, 15, 80)],  "text": (255,255,255), "accent": (180,130,255)},
-    {"bg": [(10, 30, 50), (20, 60,100)],  "text": (255,255,255), "accent": (100,200,255)},
-    {"bg": [(40, 15, 15), (90, 30, 30)],  "text": (255,255,255), "accent": (255,150,100)},
-    {"bg": [(10, 40, 25), (20, 80, 50)],  "text": (255,255,255), "accent": (100,255,150)},
-    {"bg": [(40, 30, 10), (90, 70, 20)],  "text": (255,255,255), "accent": (255,220,100)},
-    {"bg": [(30, 10, 40), (70, 20, 90)],  "text": (255,255,255), "accent": (220,100,255)},
-    {"bg": [(10, 35, 45), (20, 75, 95)],  "text": (255,255,255), "accent": (80, 220,220)},
+PALETTES = [
+    {"bg": "#F4E7C5", "text": "#2C1810", "accent": "#8B6914", "sub": "#6B4F12"},
+    {"bg": "#EAD7A1", "text": "#1A1208", "accent": "#7A5C10", "sub": "#5C4510"},
+    {"bg": "#DCC48E", "text": "#1A1208", "accent": "#6B4F0E", "sub": "#4A3509"},
+    {"bg": "#F1E3B6", "text": "#2C1810", "accent": "#8B6914", "sub": "#6B4F12"},
+    {"bg": "#E5E7EB", "text": "#111827", "accent": "#374151", "sub": "#6B7280"},
+    {"bg": "#F0F2F5", "text": "#111827", "accent": "#374151", "sub": "#6B7280"},
+    {"bg": "#D6D9DD", "text": "#111827", "accent": "#374151", "sub": "#6B7280"},
+    {"bg": "#D6A77A", "text": "#1C0F06", "accent": "#5C2E0A", "sub": "#7A3B10"},
+    {"bg": "#E0B899", "text": "#1C0F06", "accent": "#5C2E0A", "sub": "#7A3B10"},
+    {"bg": "#E8DFF5", "text": "#1A0A2E", "accent": "#4C1D95", "sub": "#6D28D9"},
+    {"bg": "#DCEEF2", "text": "#0A1E2E", "accent": "#1E3A5F", "sub": "#2563EB"},
+    {"bg": "#F5E4E0", "text": "#2E0A08", "accent": "#9B1C1C", "sub": "#C53030"},
+    {"bg": "#EAF4E1", "text": "#0A1E0A", "accent": "#14532D", "sub": "#16A34A"},
+    {"bg": "#F3E8FF", "text": "#1A0A2E", "accent": "#4C1D95", "sub": "#7C3AED"},
 ]
 
-def _font(size, bold=True):
-    path = FONT_BOLD_PATH if bold else FONT_REG_PATH
-    if path.exists():
-        return ImageFont.truetype(str(path), size)
-    for p in ["/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
-              "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"]:
+def _hex(h):
+    h = h.lstrip("#")
+    return tuple(int(h[i:i+2], 16) for i in (0, 2, 4))
+
+def _font(size, style="bold"):
+    candidates = {
+        "bold": [
+            "/usr/share/fonts/truetype/liberation/LiberationSerif-Bold.ttf",
+            "/usr/share/fonts/truetype/freefont/FreeSerifBold.ttf",
+            "/usr/share/fonts/truetype/dejavu/DejaVuSerif-Bold.ttf",
+        ],
+        "regular": [
+            "/usr/share/fonts/truetype/liberation/LiberationSerif-Regular.ttf",
+            "/usr/share/fonts/truetype/freefont/FreeSerif.ttf",
+            "/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf",
+        ],
+        "italic": [
+            "/usr/share/fonts/truetype/liberation/LiberationSerif-Italic.ttf",
+            "/usr/share/fonts/truetype/freefont/FreeSerifItalic.ttf",
+            "/usr/share/fonts/truetype/dejavu/DejaVuSerif-Italic.ttf",
+        ],
+    }
+    for p in candidates.get(style, candidates["bold"]):
+        if Path(p).exists():
+            return ImageFont.truetype(p, size)
+    for p in ["/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"]:
         if Path(p).exists():
             return ImageFont.truetype(p, size)
     return ImageFont.load_default()
 
-def _make_gradient_bg(size, palette):
+def _make_image(size, quote_data, palette):
     w, h = size
-    c1 = np.array(palette["bg"][0], dtype=float)
-    c2 = np.array(palette["bg"][1], dtype=float)
-    arr = np.zeros((h, w, 3), dtype=np.uint8)
-    for y in range(h):
-        t = y / h
-        arr[y, :] = (c1 * (1-t) + c2 * t).astype(np.uint8)
-    return Image.fromarray(arr)
+    bg_color   = _hex(palette["bg"])
+    text_color = _hex(palette["text"])
+    accent     = _hex(palette["accent"])
+    sub_color  = _hex(palette["sub"])
 
-def _add_watermark(img, palette):
-    draw = ImageDraw.Draw(img, "RGBA")
-    f_wm = _font(180, bold=True)
-    symbols = ["Sigma", "Phi", "Psi", "Lambda", "Theta", "Xi"]
-    greek   = [chr(0x03A3), chr(0x03A6), chr(0x03A8), chr(0x039B), chr(0x0398), chr(0x039E)]
-    for i in range(6):
-        sym = greek[i % len(greek)]
-        x = random.randint(50, img.width-200)
-        y = random.randint(50, img.height-200)
-        draw.text((x, y), sym, font=f_wm, fill=(255, 255, 255, 18))
-    return img
+    img  = Image.new("RGB", size, bg_color)
+    draw = ImageDraw.Draw(img)
 
-def _add_texts(img, quote_data, palette, size):
-    w, h = size
-    draw   = ImageDraw.Draw(img)
     quote  = quote_data.get("quote", "")
     author = quote_data.get("author", "")
     akim   = quote_data.get("akim", "")
-    accent = palette["accent"]
-    text_c = palette["text"]
 
-    # Tırnak
-    f_tirnak = _font(120, bold=True)
-    draw.text((55, 60), "\u201c", font=f_tirnak, fill=accent)
+    quoted_text = "\u201c%s\u201d" % quote
 
-    # Ana söz
-    f_quote = _font(72, bold=True)
-    wrapped = textwrap.fill(quote, width=42)
+    margin   = 100
+    usable_w = w - (margin * 2)
+    char_w   = 38
+    max_chars = usable_w // char_w
+
+    wrapped = textwrap.fill(quoted_text, width=max_chars)
     lines   = wrapped.split("\n")
-    total_h = len(lines) * 88
-    y = (h - total_h) // 2 - 60
+
+    f_q = _font(64, "bold") if len(lines) > 5 else _font(76, "bold")
+    lh  = 86 if len(lines) > 5 else 96
+
+    total_h = len(lines) * lh
+    y = int(h * 0.40) - total_h // 2 - 40
 
     for line in lines:
-        draw.text((62, y+3), line, font=f_quote, fill=(0, 0, 0))
-        draw.text((60, y),   line, font=f_quote, fill=text_c)
-        y += 88
+        bbox = draw.textbbox((0, 0), line, font=f_q)
+        lw   = bbox[2] - bbox[0]
+        x    = (w - lw) // 2
+        draw.text((x, y), line, font=f_q, fill=text_color)
+        y += lh
 
     # Ayraç
-    draw.rectangle([60, y+30, 200, y+33], fill=accent)
+    line_y = y + 40
+    draw.rectangle([(w//2)-60, line_y, (w//2)+60, line_y+2], fill=accent)
 
     # Yazar
-    f_author = _font(48, bold=True)
-    draw.text((62, y+48), "— %s" % author, font=f_author, fill=accent)
+    f_author    = _font(54, "italic")
+    author_text = "— %s" % author
+    bbox        = draw.textbbox((0,0), author_text, font=f_author)
+    aw          = bbox[2] - bbox[0]
+    draw.text(((w-aw)//2, line_y+20), author_text, font=f_author, fill=accent)
 
     # Akım
-    f_akim = _font(36, bold=False)
-    draw.text((62, y+108), akim, font=f_akim, fill=text_c)
+    f_akim = _font(38, "regular")
+    bbox   = draw.textbbox((0,0), akim, font=f_akim)
+    aw2    = bbox[2] - bbox[0]
+    draw.text(((w-aw2)//2, line_y+90), akim, font=f_akim, fill=sub_color)
 
-    # Logo
+    # @felsefe.co — ortalı, h*0.88 civarında (daha yukarı)
+    f_handle = _font(44, "bold")
+    handle   = "@felsefe.co"
+    bbox     = draw.textbbox((0,0), handle, font=f_handle)
+    hw       = bbox[2] - bbox[0]
+    handle_y = int(h * 0.88)
+
     if LOGO_PATH.exists():
         try:
-            logo = Image.open(LOGO_PATH).convert("RGBA")
-            logo = logo.resize((130, 130), Image.LANCZOS)
-            img.paste(logo, (w-170, h-170), logo)
+            logo  = Image.open(LOGO_PATH).convert("RGBA")
+            logo  = logo.resize((90, 90), Image.LANCZOS)
+            lx    = (w - 90) // 2
+            img.paste(logo, (lx, handle_y - 110), logo)
         except:
             pass
-    else:
-        f_logo = _font(38, bold=True)
-        draw.text((w-220, h-65), "felsefe.co", font=f_logo, fill=(255,255,255))
+
+    draw.text(((w-hw)//2, handle_y), handle, font=f_handle, fill=sub_color)
 
     return img
 
-def _make_image(size, quote_data):
-    palette = random.choice(COLOR_PALETTES)
-    img = _make_gradient_bg(size, palette)
-    img = _add_watermark(img, palette)
-    img = _add_texts(img, quote_data, palette, size)
-    return img
-
-def create_post_image(quote_data):
-    img  = _make_image(POST_SIZE, quote_data)
-    safe = re.sub(r"[^a-z0-9]", "_", quote_data.get("author","x").lower())[:20]
+def create_post_image(quote_data, palette=None):
+    if palette is None:
+        palette = random.choice(PALETTES)
+    img      = _make_image(POST_SIZE, quote_data, palette)
+    safe     = re.sub(r"[^a-z0-9]", "_", quote_data.get("author","x").lower())[:20]
     filename = "post_%s_%d.jpg" % (safe, int(time.time()))
-    path = OUTPUT_DIR / filename
+    path     = OUTPUT_DIR / filename
     img.save(str(path), "JPEG", quality=95)
-    return path
+    return path, palette
 
-def create_story_image(quote_data):
-    img  = _make_image(STORY_SIZE, quote_data)
-    safe = re.sub(r"[^a-z0-9]", "_", quote_data.get("author","x").lower())[:20]
+def create_story_image(quote_data, palette):
+    img      = _make_image(STORY_SIZE, quote_data, palette)
+    safe     = re.sub(r"[^a-z0-9]", "_", quote_data.get("author","x").lower())[:20]
     filename = "story_%s_%d.jpg" % (safe, int(time.time()))
-    path = OUTPUT_DIR / filename
+    path     = OUTPUT_DIR / filename
     img.save(str(path), "JPEG", quality=95)
     return path
