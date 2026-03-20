@@ -42,8 +42,8 @@ def run():
         quote_data = generate_quote()
         log.info("Soz uretildi: %s" % quote_data["quote"][:50])
 
-        post_img   = create_post_image(quote_data)
-        story_img  = create_story_image(quote_data)
+        post_img, palette = create_post_image(quote_data)
+        story_img  = create_story_image(quote_data, palette)
 
         send_for_approval(
             post_img=post_img,
