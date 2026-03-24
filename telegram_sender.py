@@ -37,10 +37,19 @@ def send_for_approval(post_img, story_img, quote_data, on_approve):
         )
 
     # Metin + butonlar
-    preview = "%s\n\n— %s | %s" % (
+    hashtags = quote_data.get("hashtags", "#Felsefe #Bilgelik")
+    twitter_text = quote_data.get("twitter") or quote_data["quote"]
+
+    preview = (
+        "\U0001f4dd METIN:\n%s\n\n— %s | %s"
+        "\n\n\U0001f426 TWITTER ICIN:\n%s\n\n— %s\n\n%s"
+    ) % (
         quote_data["quote"],
         quote_data["author"],
         quote_data["akim"],
+        twitter_text[:200],
+        quote_data["author"],
+        hashtags,
     )
 
     keyboard = {
