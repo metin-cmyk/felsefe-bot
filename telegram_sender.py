@@ -1,4 +1,4 @@
-import os, json, logging, threading, requests
+import os, json, logging, threading, requests, time
 from urllib.parse import quote as url_quote
 from pathlib import Path
 
@@ -8,9 +8,10 @@ TELEGRAM_TOKEN   = os.environ["TELEGRAM_TOKEN"]
 TELEGRAM_CHAT_ID = os.environ["TELEGRAM_CHAT_ID"]
 
 _last_offset = 0
+_awaiting_count = False  # Botun sayı bekleyip beklemediğini tutan değişken
 
 def send_notification(post_img, story_img, quote_data):
-    key = "quote_%d" % int(__import__("time").time())
+    key = "quote_%d" % int(time.time())
 
     # Post + Story görsellerini birlikte gonder
     with open(post_img, "rb") as pf, open(story_img, "rb") as sf:
@@ -29,12 +30,11 @@ def send_notification(post_img, story_img, quote_data):
     twitter_text = quote_data.get("twitter") or quote_data["quote"]
     preview = twitter_text[:280]
 
-    # Sadece Yeni İçerik Üret butonu kalıyor
+    # Yeni İçerik ve X Adet Üret Butonları
     keyboard = {
         "inline_keyboard": [
-            [
-                {"text": "🔄 Yeni İçerik Üret", "callback_data": "new_%s" % key},
-            ],
+            [{"text": "🔄 Yeni İçerik Üret", "callback_data": "new_%s" % key}],
+            [{"text": "🔢 X Adet Üret", "callback_data": "multi_%s" % key}],
         ]
     }
 
@@ -56,10 +56,20 @@ def _send_msg(text):
         timeout=10,
     )
 
-def _poll():
-    global _last_offset
+def _process_single_generation():
+    """Tek bir icerik uretip yayinlama dongusu"""
     from quote_generator import generate_quote
     from image_generator import create_post_image, create_story_image
+    from bot import _publish
+    
+    qd = generate_quote()
+    pi, pal = create_post_image(qd)
+    si = create_story_image(qd, pal)
+    _publish(qd, pi, si)
+    send_notification(pi, si, qd)
+
+def _poll():
+    global _last_offset, _awaiting_count
 
     while True:
         try:
@@ -71,7 +81,7 @@ def _poll():
             for update in r.json().get("result", []):
                 _last_offset = update["update_id"]
 
-                # Buton tiklama
+                # Buton tiklamalari
                 cb = update.get("callback_query", {})
                 if cb:
                     data = cb.get("data", "")
@@ -82,21 +92,52 @@ def _poll():
                     )
 
                     if data.startswith("new_"):
+                        _awaiting_count = False
                         _send_msg("Yeni icerik uretiliyor ve aninda yayinlaniyor...")
-                        def _regen():
-                            qd = generate_quote()
-                            pi, pal = create_post_image(qd)
-                            si = create_story_image(qd, pal)
-                            from bot import _publish
-                            _publish(qd, pi, si) # <-- Direk WordPress ve sosyal medyaya atar
-                            send_notification(pi, si, qd) # <-- Sonucu Telegram'a bildirir
-                        threading.Thread(target=_regen, daemon=True).start()
+                        threading.Thread(target=_process_single_generation, daemon=True).start()
 
-                # Komutlar
+                    elif data.startswith("multi_"):
+                        _awaiting_count = True
+                        _send_msg("🔢 Kaç adet içerik üretmek ve peş peşe yayınlamak istiyorsun? Lütfen sadece bir sayı yaz (Örn: 5)")
+
+                # Normal Mesaj (Komutlar veya Sayı Girişi)
                 msg = update.get("message", {})
                 text = msg.get("text", "").strip().lower()
 
+                if not text:
+                    continue
+
+                # Eğer bot sayı bekliyorsa ve girilen metin rakamsa
+                if _awaiting_count:
+                    if text.isdigit():
+                        count = int(text)
+                        _awaiting_count = False
+                        
+                        if 0 < count <= 20: # Limiti 20 ile sinirladim, istersen artirabilirsin
+                            _send_msg(f"⏳ {count} adet içerik üretimi başlıyor. API engeline takılmamak için her paylaşım arası 30 saniye beklenecektir...")
+                            
+                            def _gen_multi(c):
+                                for i in range(c):
+                                    _send_msg(f"🔄 Üretiliyor: {i+1} / {c}")
+                                    _process_single_generation()
+                                    
+                                    # Sonuncu hariç aralarda bekle
+                                    if i < c - 1:
+                                        time.sleep(30)
+                                        
+                                _send_msg("✅ Toplu üretim ve yayınlama başarıyla tamamlandı!")
+                                
+                            threading.Thread(target=_gen_multi, args=(count,), daemon=True).start()
+                        else:
+                            _send_msg("Lütfen 1 ile 20 arasında geçerli bir sayı girin.")
+                    else:
+                        _awaiting_count = False
+                        _send_msg("❌ Geçerli bir sayı girmediniz. Toplu üretim iptal edildi.")
+                    continue # Döngüye devam et, aşağıdaki komutlara geçme
+
+                # Standart Komutlar
                 if text == "/start":
+                    _awaiting_count = False
                     _send_msg(
                         "FelsefeCo Bot aktif!\n\n"
                         "Komutlar:\n"
@@ -104,15 +145,9 @@ def _poll():
                         "/durum - bot durumu"
                     )
                 elif text == "/yeni":
+                    _awaiting_count = False
                     _send_msg("Yeni icerik uretiliyor ve aninda yayinlaniyor...")
-                    def _gen():
-                        qd = generate_quote()
-                        pi, pal = create_post_image(qd)
-                        si = create_story_image(qd, pal)
-                        from bot import _publish
-                        _publish(qd, pi, si) # <-- Direk WordPress ve sosyal medyaya atar
-                        send_notification(pi, si, qd) # <-- Sonucu Telegram'a bildirir
-                    threading.Thread(target=_gen, daemon=True).start()
+                    threading.Thread(target=_process_single_generation, daemon=True).start()
 
                 elif text == "/durum":
                     posted_file = Path("posted.json")
@@ -121,6 +156,7 @@ def _poll():
 
         except Exception as e:
             log.warning("Polling hatasi: %s" % e)
+            time.sleep(5) # Hata alirsa spamlama yapmamasi icin 5 sn bekle
 
 def start_listener():
     t = threading.Thread(target=_poll, daemon=True)
