@@ -56,7 +56,7 @@ TWITTER:
 [Ayni sözün Twitter versiyonu — max 200 karakter, TIRNAK KULLANMA]
 ---
 HASHTAG:
-[6-8 adet hashtag — #Felsefe #Bilgelik zorunlu, konuyla ilgili 4-6 tane daha ekle]
+[5 adet hashtag — #Felsefe ve #Bilgelik zorunlu, konuyla ilgili 3 tane daha ekle]
 ---
 ACIKLAMA:
 [Sözün kisa Türkçe aciklamasi — 1 cümle, Instagram caption için]"""
