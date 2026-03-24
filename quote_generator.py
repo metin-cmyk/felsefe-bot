@@ -7,31 +7,61 @@ AKIMLAR = [
     "Budizm",
     "Taoizm",
     "Varoluşculuk",
+    "Nihilizm",
+    "Pragmatizm",
+    "Epikurizm",
+    "Skeptisizm",
+    "Fenomenoloji",
+    "Anarşizm",
+    "Transandantalizm",
+    "Sufizm",
+    "Konfucyanism",
     "Genel bilgelik",
     "Modern psikoloji",
+    "Feminist felsefe",
+    "Doğu felsefesi",
 ]
 
 FILOZOFLAR = {
-    "Stoacilik": ["Marcus Aurelius", "Epiktetos", "Seneca", "Zeno"],
-    "Budizm": ["Buda", "Thich Nhat Hanh", "Dalai Lama"],
-    "Taoizm": ["Laozi", "Zhuangzi"],
-    "Varoluşculuk": ["Albert Camus", "Friedrich Nietzsche", "Jean-Paul Sartre", "Simone de Beauvoir"],
-    "Genel bilgelik": ["Sokrates", "Aristo", "Platon", "Konfucyus"],
-    "Modern psikoloji": ["Carl Jung", "Viktor Frankl", "Erich Fromm"],
+    "Stoacilik":          ["Marcus Aurelius", "Epiktetos", "Seneca", "Zeno", "Kleantes", "Chrysippos"],
+    "Budizm":             ["Buda", "Thich Nhat Hanh", "Dalai Lama", "Nagarjuna", "Shunryu Suzuki"],
+    "Taoizm":             ["Laozi", "Zhuangzi", "Liezi"],
+    "Varoluşculuk":       ["Albert Camus", "Friedrich Nietzsche", "Jean-Paul Sartre", "Simone de Beauvoir", "Søren Kierkegaard", "Martin Heidegger", "Karl Jaspers"],
+    "Nihilizm":           ["Friedrich Nietzsche", "Emil Cioran", "Arthur Schopenhauer"],
+    "Pragmatizm":         ["William James", "John Dewey", "Charles Sanders Peirce", "Richard Rorty"],
+    "Epikurizm":          ["Epikuros", "Lucretius", "Philodemus"],
+    "Skeptisizm":         ["Montaigne", "David Hume", "Pyrrho"],
+    "Fenomenoloji":       ["Edmund Husserl", "Maurice Merleau-Ponty", "Simone de Beauvoir"],
+    "Anarşizm":           ["Peter Kropotkin", "Emma Goldman", "Mikhail Bakunin"],
+    "Transandantalizm":   ["Ralph Waldo Emerson", "Henry David Thoreau"],
+    "Sufizm":             ["Rumi", "Hafız", "Ibn Arabi", "Yunus Emre", "Hacı Bektaş Veli"],
+    "Konfucyanism":       ["Konfucyus", "Mozi", "Mengzi", "Xunzi"],
+    "Genel bilgelik":     ["Sokrates", "Aristo", "Platon", "Herakleitos", "Demokritos", "Pythagoras", "Diogenes", "Parmenides"],
+    "Modern psikoloji":   ["Carl Jung", "Viktor Frankl", "Erich Fromm", "Abraham Maslow", "Alfred Adler", "Karen Horney"],
+    "Feminist felsefe":   ["Simone de Beauvoir", "bell hooks", "Hannah Arendt", "Mary Wollstonecraft", "Judith Butler"],
+    "Doğu felsefesi":     ["Rabindranath Tagore", "Swami Vivekananda", "Jiddu Krishnamurti", "Alan Watts", "D.T. Suzuki"],
 }
 
 KONULAR = [
     "hayatın anlamı", "özgürlük", "mutluluk", "acı ve büyüme",
-    "sabır ve direniş", "an'da yaşamak", "iç huzur", "cesaret",
+    "sabır ve direniş", "anda yaşamak", "iç huzur", "cesaret",
     "değişim ve dönüşüm", "benlik", "sevgi", "ölüm ve ölümsüzlük",
     "bilgelik", "doğa ile uyum", "ego ve özbenlik",
+    "yalnızlık", "sessizlik", "özgün olmak", "toplum ve birey",
+    "adalet", "ahlak", "vicdan", "sorumluluk", "affetmek",
+    "geçmişi bırakmak", "belirsizlik", "kaygı ve korku",
+    "yaratıcılık", "emek ve anlam", "beden ve ruh",
+    "sezgi", "bilinç", "uyku ve rüya", "zaman",
+    "dostluk", "aşk", "kayıp ve yas", "şükran",
+    "merak", "öğrenmek", "sadelik", "alçakgönüllülük",
+    "güç ve iktidar", "direniş", "umut", "hayal kırıklığı",
+    "kimlik", "hafıza", "dil ve anlam", "sessiz bilgelik",
 ]
 
 def generate_quote() -> dict:
-    akim    = random.choice(AKIMLAR)
-    filozoflar = FILOZOFLAR[akim]
-    filozof = random.choice(filozoflar)
-    konu    = random.choice(KONULAR)
+    akim      = random.choice(AKIMLAR)
+    filozof   = random.choice(FILOZOFLAR[akim])
+    konu      = random.choice(KONULAR)
 
     system = """Sen derin bir felsefe bilgisine sahip Türkçe içerik üreticisisin.
 Felsefi sözler üretiyorsun — kısa, güçlü, düşündürücü.
@@ -67,16 +97,14 @@ ACIKLAMA:
         system=system,
         messages=[{
             "role": "user",
-            "content": "%s felsefesinden %s'nin %s hakkinda derin bir soz uret." % (akim, filozof, konu)
+            "content": "%s felsefesinden %s'nin %s hakkinda derin bir söz üret." % (akim, filozof, konu)
         }]
     )
 
     return _parse(msg.content[0].text.strip(), filozof, akim)
 
 def _clean_quotes(text):
-    """Basta ve sonda tirnak isaretlerini temizle."""
     text = text.strip()
-    # Çeşitli tırnak karakterlerini temizle
     for q in ['\u201c', '\u201d', '\u2018', '\u2019', '"', "'"]:
         if text.startswith(q):
             text = text[1:]
@@ -90,21 +118,16 @@ def _parse(text, default_autor, default_akim):
         m = re.search(pattern, text, re.DOTALL)
         return m.group(1).strip() if m else ""
 
-    quote = _clean_quotes(get("SOZ"))
+    quote    = _clean_quotes(get("SOZ"))
+    author   = get("YAZAR") or default_autor
+    hashtags = get("HASHTAG") or "#Felsefe #Bilgelik"
 
-    # Twitter metnini de tırnaksız yap, sonuna hashtag ekle
-    twitter_raw = _clean_quotes(get("TWITTER"))
-    hashtags    = get("HASHTAG") or "#Felsefe #Bilgelik"
-
-    # Twitter metni yoksa quote'tan oluştur
-    if not twitter_raw:
-        twitter_raw = quote[:180]
-
-    twitter = "%s\n\n— %s\n\n%s" % (twitter_raw, get("YAZAR") or default_autor, hashtags)
+    twitter_raw = _clean_quotes(get("TWITTER")) or quote[:200]
+    twitter = "%s\n\n— %s\n\n%s" % (twitter_raw, author, hashtags)
 
     return {
         "quote":    quote,
-        "author":   get("YAZAR") or default_autor,
+        "author":   author,
         "akim":     get("AKIM") or default_akim,
         "twitter":  twitter,
         "hashtags": hashtags,
