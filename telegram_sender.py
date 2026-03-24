@@ -41,11 +41,7 @@ def send_for_approval(post_img, story_img, quote_data, on_approve):
     twitter_text = quote_data.get("twitter") or quote_data["quote"]
 
     # Tek blok — kopyalayip direkt yapistir
-    preview = "%s\n\n— %s\n\n%s" % (
-        twitter_text[:200],
-        quote_data["author"],
-        hashtags,
-    )
+    preview = twitter_text[:280]
 
     keyboard = {
         "inline_keyboard": [[
