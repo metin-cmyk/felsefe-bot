@@ -1,49 +1,60 @@
-import os
-import telebot
-# Senin orijinal dosyalarından import ediyoruz
-from quote_generator import generate_quote 
-from image_generator import create_post_image  # Logdaki hataya göre doğrusu bu
-from publishers import send_to_wordpress
+import os, json, logging, telebot
+from pathlib import Path
+from datetime import datetime
+
+# Senin orijinal dosyaların
+from quote_generator import generate_quote
+from image_generator import create_post_image, create_story_image
+from publishers import post_to_wordpress
 
 TOKEN = os.getenv('TELEGRAM_TOKEN')
 bot = telebot.TeleBot(TOKEN)
 
 @bot.message_handler(commands=['start'])
 def welcome(message):
-    bot.reply_to(message, "Felsefe Botu Hazır!\n\n/yeni - İçerik üretir\n/paylas Başlık | İçerik - Siteye yükler")
+    bot.reply_to(message, "Felsefemiz Bot Aktif!\n/yeni - Yeni içerik üretir\n/paylas Başlık | İçerik - Manuel yükler")
 
-# SENİN ORİJİNAL KOMUTUN (Düzeltildi)
 @bot.message_handler(commands=['yeni'])
 def yeni_icerik(message):
-    bot.reply_to(message, "📜 İçerik üretiliyor...")
+    bot.reply_to(message, "📜 İçerik ve görseller üretiliyor...")
     try:
-        quote = generate_quote()
-        # Logda 'create_post_image' kullanman gerektiği yazıyordu, ona sadık kaldım
-        image_path = create_post_image(quote) 
+        quote_data = generate_quote()
+        # DOĞRU KULLANIM: Senin fonksiyonun tuple döndürür (Yol, Palet)
+        post_img, palette = create_post_image(quote_data) 
+        story_img = create_story_image(quote_data, palette)
         
-        with open(image_path, 'rb') as photo:
-            bot.send_photo(message.chat.id, photo, caption=f"Günün Sözü:\n\n{quote}")
+        # Telegram'a gönder
+        with open(post_img, 'rb') as photo:
+            bot.send_photo(message.chat.id, photo, caption=f"Söz: {quote_data['quote']}\n\nYazar: {quote_data['author']}")
+            
+        # WordPress'e yükle (Opsiyonel)
+        wp_link = post_to_wordpress(quote_data, post_img)
+        if wp_link:
+            bot.send_message(message.chat.id, f"✅ Siteye de yüklendi: {wp_link}")
+            
     except Exception as e:
-        bot.reply_to(message, f"Üretim hatası: {e}")
+        bot.reply_to(message, f"Üretim hatası: {str(e)}")
 
-# YENİ EKLEDİĞİMİZ WORDPRESS KOMUTU
 @bot.message_handler(commands=['paylas'])
 def handle_paylas(message):
     try:
         raw_text = message.text.replace('/paylas ', '')
         if "|" not in raw_text:
-            bot.reply_to(message, "Format: /paylas Başlık | İçerik")
+            bot.reply_to(message, "Format: Başlık | İçerik")
             return
+        b, i = raw_text.split('|', 1)
+        # Manuel paylaşım için basit sözlük yapısı
+        q_data = {"quote": i.strip(), "author": b.strip()}
         
-        baslik, icerik = raw_text.split('|', 1)
-        bot.reply_to(message, "⏳ Siteye (felsefemiz.net) yükleniyor...")
+        bot.reply_to(message, "⏳ Siteye gönderiliyor...")
+        # Senin orijinal image_generator'ını kullanarak görsel üretip yüklüyoruz
+        p_img, pal = create_post_image(q_data)
+        link = post_to_wordpress(q_data, p_img)
         
-        success, msg = send_to_wordpress(baslik.strip(), icerik.strip())
-        
-        if success:
-            bot.send_message(message.chat.id, f"✅ Sitede yayınlandı: {baslik.strip()}")
+        if link:
+            bot.send_message(message.chat.id, f"✅ Yayınlandı: {link}")
         else:
-            bot.reply_to(message, f"❌ Yükleme hatası: {msg}")
+            bot.reply_to(message, "❌ WordPress yükleme başarısız.")
     except Exception as e:
         bot.reply_to(message, f"Hata: {e}")
 
