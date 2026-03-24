@@ -3,6 +3,7 @@ from pathlib import Path
 
 log = logging.getLogger(__name__)
 
+# --- WordPress Ayarları ---
 WP_URL      = os.environ.get("WP_URL", "https://felsefemiz.net")
 WP_USER     = os.environ.get("WP_USER", "serezart")
 WP_APP_PASS = os.environ.get("WP_APP_PASS", "")
@@ -22,26 +23,65 @@ def _wp_upload_image(image_path):
     r.raise_for_status()
     return r.json()["id"]
 
+def _generate_term_description(term_name, type_label):
+    """Yeni bir filozof veya akim eklendiginde AI ile biyografi/aciklama uretir."""
+    try:
+        from quote_generator import client # Mevcut Claude client'ini kullanir
+        
+        prompt = (f"{term_name} isimli {type_label} hakkinda profesyonel, "
+                  f"ansiklopedik ve felsefi bir aciklama yaz. 2-3 paragraf uzunlugunda olsun. "
+                  f"Turkce olsun ve okuyucuya derin bir perspektif sunsun.")
+        
+        msg = client.messages.create(
+            model="claude-3-5-sonnet-20240620",
+            max_tokens=800,
+            messages=[{"role": "user", "content": prompt}]
+        )
+        return msg.content[0].text.strip()
+    except Exception as e:
+        log.error(f"AI Aciklama uretme hatasi: {e}")
+        return f"{term_name} üzerine felsefi inceleme."
+
 def _ensure_term_with_cover(taxonomy_slug, term_name, subtitle_text):
+    """Terimi arar, bulamazsa AI biyografisi ve gorseliyle birlikte olusturur."""
     if not WP_APP_PASS or not term_name: return None
+    
+    # Mevcut terimi ara
     search_url = "%s/wp-json/wp/v2/%s?search=%s" % (WP_URL, taxonomy_slug, term_name)
     try:
         r = requests.get(search_url, auth=(WP_USER, WP_APP_PASS), timeout=30)
         if r.status_code == 200:
             for term in r.json():
-                if term["name"].lower() == term_name.lower(): return term["id"]
+                if term["name"].lower() == term_name.lower(): 
+                    return term["id"]
 
-        log.info(f"Yeni {taxonomy_slug} saptandi: {term_name}. Kapak gorseli uretiliyor...")
+        # Terim yoksa yeni surec baslar
+        log.info(f"Yeni {taxonomy_slug} saptandi: {term_name}. Kapak gorseli ve biyografi hazirlaniyor...")
+        
+        # 1. Kapak Gorseli Uret
         from image_generator import create_square_cover
         cover_path = create_square_cover(term_name, subtitle=subtitle_text)
         media_id = _wp_upload_image(cover_path)
         
+        # 2. AI Aciklama/Biyografi Uret
+        type_label = "filozof/düşünür" if taxonomy_slug == "filozof" else "felsefi akım"
+        ai_desc = _generate_term_description(term_name, type_label)
+        
+        # 3. WordPress'e Terimi Ekle (Aciklama ve ACF Gorseli ile)
         create_url = "%s/wp-json/wp/v2/%s" % (WP_URL, taxonomy_slug)
-        payload = {"name": term_name, "acf": {"kapak_gorseli": media_id}}
+        payload = {
+            "name": term_name,
+            "description": ai_desc, # WP standart aciklama kutusu
+            "acf": {
+                "kapak_gorseli": media_id # Senin ACF alanin
+            }
+        }
         r_create = requests.post(create_url, auth=(WP_USER, WP_APP_PASS), json=payload, timeout=30)
-        if r_create.status_code == 201: return r_create.json()["id"]
+        if r_create.status_code == 201: 
+            return r_create.json()["id"]
+            
     except Exception as e:
-        log.error("Taksonomi hatasi: %s" % e)
+        log.error("Taksonomi olusturma hatasi: %s" % e)
     return None
 
 def _get_or_create_wp_tag(tag_name):
@@ -66,6 +106,7 @@ def post_to_wordpress(quote_data, post_img):
     aciklama = quote_data.get("aciklama", "")
     title = f"{yazar} - {akim} Sözleri"
 
+    # Kategoriyi (Akim) ve Filozofu kontrol et/olustur
     cat_id = _ensure_term_with_cover("categories", akim, "Felsefi Akımlar ve Düşünceler")
     filozof_id = _ensure_term_with_cover("filozof", yazar, "Tarihe Yön Veren Düşünürler")
 
@@ -99,7 +140,7 @@ def post_to_wordpress(quote_data, post_img):
     log.info("WordPress'e ACF verileriyle yayinlandi: %s" % r.json().get("link", ""))
     return r.json().get("link", "")
 
-
+# --- Sosyal Medya Entegrasyonlari ---
 META_ACCESS_TOKEN    = os.environ.get("META_ACCESS_TOKEN", "")
 INSTAGRAM_ACCOUNT_ID = os.environ.get("INSTAGRAM_ACCOUNT_ID", "")
 FACEBOOK_PAGE_ID     = os.environ.get("FACEBOOK_PAGE_ID", "")
@@ -133,9 +174,9 @@ def _tweet_with_image(text, image_path):
     import tweepy
     auth = tweepy.OAuth1UserHandler(TWITTER_CONSUMER_KEY, TWITTER_CONSUMER_SECRET, TWITTER_ACCESS_TOKEN, TWITTER_ACCESS_SECRET)
     api_v1 = tweepy.API(auth)
-    client = tweepy.Client(consumer_key=TWITTER_CONSUMER_KEY, consumer_secret=TWITTER_CONSUMER_SECRET, access_token=TWITTER_ACCESS_TOKEN, access_token_secret=TWITTER_ACCESS_SECRET)
+    client_twitter = tweepy.Client(consumer_key=TWITTER_CONSUMER_KEY, consumer_secret=TWITTER_CONSUMER_SECRET, access_token=TWITTER_ACCESS_TOKEN, access_token_secret=TWITTER_ACCESS_SECRET)
     media_ids = [str(api_v1.media_upload(str(image_path)).media_id)] if image_path and Path(str(image_path)).exists() else None
-    client.create_tweet(text=text[:280], media_ids=media_ids) if media_ids else client.create_tweet(text=text[:280])
+    client_twitter.create_tweet(text=text[:280], media_ids=media_ids) if media_ids else client_twitter.create_tweet(text=text[:280])
 
 def publish_all(quote_data, post_img, story_img):
     hashtags = quote_data.get("hashtags", "#Felsefe #Bilgelik")
