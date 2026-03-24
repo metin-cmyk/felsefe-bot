@@ -1,62 +1,99 @@
-import os, json, logging, telebot
+import os, json, logging, schedule, time
 from pathlib import Path
 from datetime import datetime
 
-# Senin orijinal dosyaların
 from quote_generator import generate_quote
 from image_generator import create_post_image, create_story_image
-from publishers import post_to_wordpress
+from publishers import publish_all, post_to_wordpress
+from telegram_sender import send_for_approval, set_approve_callback, start_listener
 
-TOKEN = os.getenv('TELEGRAM_TOKEN')
-bot = telebot.TeleBot(TOKEN)
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    handlers=[logging.FileHandler("bot.log", encoding="utf-8"), logging.StreamHandler()]
+)
+log = logging.getLogger(__name__)
 
-@bot.message_handler(commands=['start'])
-def welcome(message):
-    bot.reply_to(message, "Felsefemiz Bot Aktif!\n/yeni - Yeni içerik üretir\n/paylas Başlık | İçerik - Manuel yükler")
+POSTED_FILE = Path("posted.json")
 
-@bot.message_handler(commands=['yeni'])
-def yeni_icerik(message):
-    bot.reply_to(message, "📜 İçerik ve görseller üretiliyor...")
+SCHEDULE = [
+    "09:00",
+    "13:00",
+    "20:00",
+]
+
+def load_posted():
+    if POSTED_FILE.exists():
+        return json.loads(POSTED_FILE.read_text())
+    return []
+
+def save_posted(posted):
+    POSTED_FILE.write_text(json.dumps(posted, ensure_ascii=False, indent=2))
+
+def run():
+    hour = datetime.now().hour
+    if hour < 8 or hour >= 23:
+        log.info("Gece modu, atlaniyor.")
+        return
+
+    log.info("Yeni icerik uretiliyor...")
+
     try:
         quote_data = generate_quote()
-        # DOĞRU KULLANIM: Senin fonksiyonun tuple döndürür (Yol, Palet)
-        post_img, palette = create_post_image(quote_data) 
-        story_img = create_story_image(quote_data, palette)
-        
-        # Telegram'a gönder
-        with open(post_img, 'rb') as photo:
-            bot.send_photo(message.chat.id, photo, caption=f"Söz: {quote_data['quote']}\n\nYazar: {quote_data['author']}")
-            
-        # WordPress'e yükle (Opsiyonel)
-        wp_link = post_to_wordpress(quote_data, post_img)
-        if wp_link:
-            bot.send_message(message.chat.id, f"✅ Siteye de yüklendi: {wp_link}")
-            
-    except Exception as e:
-        bot.reply_to(message, f"Üretim hatası: {str(e)}")
+        log.info("Soz uretildi: %s" % quote_data["quote"][:50])
 
-@bot.message_handler(commands=['paylas'])
-def handle_paylas(message):
-    try:
-        raw_text = message.text.replace('/paylas ', '')
-        if "|" not in raw_text:
-            bot.reply_to(message, "Format: Başlık | İçerik")
-            return
-        b, i = raw_text.split('|', 1)
-        # Manuel paylaşım için basit sözlük yapısı
-        q_data = {"quote": i.strip(), "author": b.strip()}
-        
-        bot.reply_to(message, "⏳ Siteye gönderiliyor...")
-        # Senin orijinal image_generator'ını kullanarak görsel üretip yüklüyoruz
-        p_img, pal = create_post_image(q_data)
-        link = post_to_wordpress(q_data, p_img)
-        
-        if link:
-            bot.send_message(message.chat.id, f"✅ Yayınlandı: {link}")
-        else:
-            bot.reply_to(message, "❌ WordPress yükleme başarısız.")
+        post_img, palette = create_post_image(quote_data)
+        story_img  = create_story_image(quote_data, palette)
+
+        send_for_approval(
+            post_img=post_img,
+            story_img=story_img,
+            quote_data=quote_data,
+            on_approve=lambda: _publish(quote_data, post_img, story_img),
+        )
     except Exception as e:
-        bot.reply_to(message, f"Hata: {e}")
+        log.error("Hata: %s" % e, exc_info=True)
+
+def _publish(quote_data, post_img, story_img):
+    try:
+        from publishers import publish_all, post_to_wordpress
+        wp_url = post_to_wordpress(quote_data, post_img)
+        publish_all(quote_data, post_img, story_img)
+        posted = load_posted()
+        posted.append({
+            "quote": quote_data["quote"],
+            "author": quote_data["author"],
+            "time": datetime.now().isoformat(),
+            "wp_url": wp_url or "",
+        })
+        save_posted(posted)
+        msg = "✅ Yayinlandi!"
+        if wp_url:
+            msg += "\n\n🌐 WordPress: %s" % wp_url
+        log.info(msg)
+        try:
+            from telegram_sender import _send_msg
+            _send_msg(msg)
+        except Exception:
+            pass
+    except Exception as e:
+        log.error("Yayinlama hatasi: %s" % e, exc_info=True)
+
+def main():
+    log.info("FelsefeCo Bot basliyor...")
+
+    set_approve_callback(_publish)
+    start_listener()
+
+    for t in SCHEDULE:
+        schedule.every().day.at(t).do(run)
+
+    if os.getenv("RUN_NOW", "false") == "true":
+        run()
+
+    while True:
+        schedule.run_pending()
+        time.sleep(30)
 
 if __name__ == "__main__":
-    bot.infinity_polling()
+    main()
