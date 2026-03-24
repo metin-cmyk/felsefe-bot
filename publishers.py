@@ -3,6 +3,94 @@ from pathlib import Path
 
 log = logging.getLogger(__name__)
 
+# ---------------------------------------------------------------------------
+# WordPress
+# ---------------------------------------------------------------------------
+
+WP_URL      = os.environ.get("WP_URL", "https://felsefemiz.net")
+WP_USER     = os.environ.get("WP_USER", "serezart")
+WP_APP_PASS = os.environ.get("WP_APP_PASS", "")
+
+def _wp_upload_image(image_path):
+    """Görseli WordPress media kütüphanesine yükle, media ID döndür."""
+    if not WP_APP_PASS:
+        raise RuntimeError("WP_APP_PASS eksik!")
+    with open(image_path, "rb") as f:
+        img_data = f.read()
+    filename = Path(image_path).name
+    r = requests.post(
+        "%s/wp-json/wp/v2/media" % WP_URL,
+        auth=(WP_USER, WP_APP_PASS),
+        headers={
+            "Content-Disposition": "attachment; filename=%s" % filename,
+            "Content-Type": "image/jpeg",
+        },
+        data=img_data,
+        timeout=60,
+    )
+    log.info("WP media upload HTTP %d: %s" % (r.status_code, r.text[:200]))
+    r.raise_for_status()
+    media_id = r.json()["id"]
+    log.info("WP gorsel yuklendi, media_id: %s" % media_id)
+    return media_id
+
+def post_to_wordpress(quote_data, post_img):
+    """Felsefi sozu gorseliyle birlikte WordPress'e yayinla."""
+    if not WP_APP_PASS:
+        log.warning("WP_APP_PASS eksik, WordPress atlaniyor.")
+        return None
+
+    hashtags = quote_data.get("hashtags", "#Felsefe #Bilgelik")
+
+    # Başlık: sözün ilk 60 karakteri
+    title = quote_data["quote"][:60]
+
+    # İçerik: tam söz + yazar + akım + açıklama + hashtagler
+    aciklama = quote_data.get("aciklama", "")
+    content = """<blockquote>
+<p>%s</p>
+<cite>— %s | %s</cite>
+</blockquote>
+
+%s
+
+<p>%s</p>""" % (
+        quote_data["quote"],
+        quote_data["author"],
+        quote_data["akim"],
+        aciklama,
+        hashtags,
+    )
+
+    # Önce görseli yükle
+    media_id = None
+    try:
+        media_id = _wp_upload_image(post_img)
+    except Exception as e:
+        log.error("WP gorsel yuklenemedi: %s" % e, exc_info=True)
+
+    # Post oluştur
+    post_data = {
+        "title":   title,
+        "content": content,
+        "status":  "publish",
+        "categories": [],
+    }
+    if media_id:
+        post_data["featured_media"] = media_id
+
+    r = requests.post(
+        "%s/wp-json/wp/v2/posts" % WP_URL,
+        auth=(WP_USER, WP_APP_PASS),
+        json=post_data,
+        timeout=30,
+    )
+    log.info("WP post HTTP %d: %s" % (r.status_code, r.text[:300]))
+    r.raise_for_status()
+    post_url = r.json().get("link", "")
+    log.info("WordPress'e yayinlandi: %s" % post_url)
+    return post_url
+
 META_ACCESS_TOKEN    = os.environ.get("META_ACCESS_TOKEN", "")
 INSTAGRAM_ACCOUNT_ID = os.environ.get("INSTAGRAM_ACCOUNT_ID", "")
 FACEBOOK_PAGE_ID     = os.environ.get("FACEBOOK_PAGE_ID", "")
@@ -134,6 +222,14 @@ def publish_all(quote_data, post_img, story_img):
         quote_data["akim"],
         hashtags,
     )
+
+    # WordPress
+    try:
+        wp_url = post_to_wordpress(quote_data, post_img)
+        if wp_url:
+            log.info("WordPress yayinlandi: %s" % wp_url)
+    except Exception as e:
+        log.error("WordPress hatasi: %s" % e, exc_info=True)
 
     # Instagram + Facebook (Meta key'leri varsa)
     if META_ACCESS_TOKEN and INSTAGRAM_ACCOUNT_ID and FACEBOOK_PAGE_ID:

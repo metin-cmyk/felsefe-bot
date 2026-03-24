@@ -6,7 +6,7 @@ import numpy as np
 OUTPUT_DIR = Path("images")
 OUTPUT_DIR.mkdir(exist_ok=True)
 
-LOGO_PATH = Path("felsefeco_logo.png")
+SITE_HANDLE = "felsefemiz.net"
 
 # Font dosyaları projenin kendi klasöründe
 BASE_DIR = Path(__file__).parent
@@ -177,21 +177,12 @@ def _make_image(size, quote_data, palette):
     aw2    = bbox[2] - bbox[0]
     draw.text(((w-aw2)//2, line_y+96), akim, font=f_akim, fill=sub_color)
 
-    # @felsefe.co
+    # felsefemiz.net
     handle_y = int(h * 0.87)
-    if LOGO_PATH.exists():
-        try:
-            logo = Image.open(LOGO_PATH).convert("RGBA")
-            logo = logo.resize((90, 90), Image.LANCZOS)
-            img.paste(logo, ((w-90)//2, handle_y - 110), logo)
-        except:
-            pass
-
     f_handle = _font(46, "bold")
-    handle   = "@felsefe.co"
-    bbox     = draw.textbbox((0,0), handle, font=f_handle)
+    bbox     = draw.textbbox((0,0), SITE_HANDLE, font=f_handle)
     hw       = bbox[2] - bbox[0]
-    draw.text(((w-hw)//2, handle_y), handle, font=f_handle, fill=sub_color)
+    draw.text(((w-hw)//2, handle_y), SITE_HANDLE, font=f_handle, fill=sub_color)
 
     return img
 

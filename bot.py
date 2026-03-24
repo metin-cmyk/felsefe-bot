@@ -4,7 +4,7 @@ from datetime import datetime
 
 from quote_generator import generate_quote
 from image_generator import create_post_image, create_story_image
-from publishers import publish_all
+from publishers import publish_all, post_to_wordpress
 from telegram_sender import send_for_approval, set_approve_callback, start_listener
 
 logging.basicConfig(
@@ -56,15 +56,26 @@ def run():
 
 def _publish(quote_data, post_img, story_img):
     try:
+        from publishers import publish_all, post_to_wordpress
+        wp_url = post_to_wordpress(quote_data, post_img)
         publish_all(quote_data, post_img, story_img)
         posted = load_posted()
         posted.append({
             "quote": quote_data["quote"],
             "author": quote_data["author"],
-            "time": datetime.now().isoformat()
+            "time": datetime.now().isoformat(),
+            "wp_url": wp_url or "",
         })
         save_posted(posted)
-        log.info("Yayinlandi!")
+        msg = "✅ Yayinlandi!"
+        if wp_url:
+            msg += "\n\n🌐 WordPress: %s" % wp_url
+        log.info(msg)
+        try:
+            from telegram_sender import _send_msg
+            _send_msg(msg)
+        except Exception:
+            pass
     except Exception as e:
         log.error("Yayinlama hatasi: %s" % e, exc_info=True)
 
