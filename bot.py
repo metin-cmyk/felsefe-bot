@@ -5,7 +5,7 @@ from datetime import datetime
 from quote_generator import generate_quote
 from image_generator import create_post_image, create_story_image
 from publishers import publish_all, post_to_wordpress
-from telegram_sender import send_for_approval, set_approve_callback, start_listener
+from telegram_sender import send_notification, start_listener
 
 logging.basicConfig(
     level=logging.INFO,
@@ -36,7 +36,7 @@ def run():
         log.info("Gece modu, atlaniyor.")
         return
 
-    log.info("Yeni icerik uretiliyor...")
+    log.info("Yeni icerik uretiliyor ve otomatik yayinlaniyor...")
 
     try:
         quote_data = generate_quote()
@@ -45,12 +45,12 @@ def run():
         post_img, palette = create_post_image(quote_data)
         story_img  = create_story_image(quote_data, palette)
 
-        send_for_approval(
-            post_img=post_img,
-            story_img=story_img,
-            quote_data=quote_data,
-            on_approve=lambda: _publish(quote_data, post_img, story_img),
-        )
+        # Önce WordPress ve sosyal medyada anında yayınla
+        _publish(quote_data, post_img, story_img)
+        
+        # Ardından Telegram'a görselleri ve Yeni Üret butonunu gönder
+        send_notification(post_img=post_img, story_img=story_img, quote_data=quote_data)
+        
     except Exception as e:
         log.error("Hata: %s" % e, exc_info=True)
 
@@ -82,7 +82,7 @@ def _publish(quote_data, post_img, story_img):
 def main():
     log.info("FelsefeCo Bot basliyor...")
 
-    set_approve_callback(_publish)
+    # Listener'ı başlat
     start_listener()
 
     for t in SCHEDULE:
