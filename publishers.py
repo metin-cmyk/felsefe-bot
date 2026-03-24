@@ -1,32 +1,48 @@
-import requests
-import base64
+import os, logging, requests, base64
+from pathlib import Path
 
-# WordPress Bilgilerin
-WP_URL = "https://felsefemiz.net/wp-json/wp/v2/posts"
-WP_USER = "serezart"
-WP_APP_PASS = "TBTJ w0hn 9Pz7 FyIa A6py xj6O"
+log = logging.getLogger(__name__)
 
-def send_to_wordpress(title, content):
-    """felsefemiz.net sitesine içerik gönderir."""
-    credentials = f"{WP_USER}:{WP_APP_PASS}"
-    token = base64.b64encode(credentials.encode()).decode()
-    
-    headers = {
-        'Authorization': f'Basic {token}',
-        'Content-Type': 'application/json'
-    }
-    
-    payload = {
-        'title': title,
-        'content': content,
-        'status': 'publish'
-    }
-    
+WP_URL      = "https://felsefemiz.net"
+WP_USER     = "serezart"
+WP_APP_PASS = "TBTJ w0hn 9Pz7 FyIa A6py xj6O" # Şifreni buraya sabitledim
+
+def post_to_wordpress(quote_data, image_path):
+    """Senin orijinal publishers.py yapınla uyumlu WordPress gönderici."""
     try:
-        response = requests.post(WP_URL, json=payload, headers=headers)
-        if response.status_code == 201:
-            return True, "Başarılı"
-        else:
-            return False, f"Hata: {response.status_code}"
+        # Önce görseli yükle (Media ID al)
+        with open(image_path, "rb") as f:
+            img_data = f.read()
+        
+        filename = Path(image_path).name
+        media_r = requests.post(
+            f"{WP_URL}/wp-json/wp/v2/media",
+            auth=(WP_USER, WP_APP_PASS),
+            headers={
+                "Content-Disposition": f"attachment; filename={filename}",
+                "Content-Type": "image/jpeg",
+            },
+            data=img_data,
+            timeout=60
+        )
+        media_id = media_r.json().get("id")
+
+        # Sonra yazıyı paylaş
+        payload = {
+            "title": quote_data.get("quote", "Yeni Paylaşım")[:50],
+            "content": f"{quote_data.get('quote')}\n\n— {quote_data.get('author')}\n\n#felsefe",
+            "status": "publish",
+            "featured_media": media_id
+        }
+        
+        post_r = requests.post(
+            f"{WP_URL}/wp-json/wp/v2/posts",
+            auth=(WP_USER, WP_APP_PASS),
+            json=payload,
+            timeout=60
+        )
+        if post_r.status_code == 201:
+            return post_r.json().get("link")
     except Exception as e:
-        return False, str(e)
+        log.error(f"WP Hatası: {e}")
+    return None
