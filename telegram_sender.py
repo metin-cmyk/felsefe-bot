@@ -1,4 +1,5 @@
 import os, json, logging, threading, requests
+from urllib.parse import quote as url_quote
 from pathlib import Path
 
 log = logging.getLogger(__name__)
@@ -44,10 +45,9 @@ def send_for_approval(post_img, story_img, quote_data, on_approve):
     preview = twitter_text[:280]
 
     # Paylaşım linkleri
-    encoded = __import__('urllib.parse', fromlist=['quote']).parse.quote(twitter_text[:280])
-    fb_encoded = __import__('urllib.parse', fromlist=['quote']).parse.quote(
-        quote_data["quote"] + "\n\n— " + quote_data["author"] + "\n\n" + hashtags
-    )
+    encoded    = url_quote(twitter_text[:280])
+    fb_text    = "%s\n\n— %s\n\n%s" % (quote_data["quote"], quote_data["author"], hashtags)
+    fb_encoded = url_quote(fb_text)
 
     keyboard = {
         "inline_keyboard": [
@@ -62,7 +62,7 @@ def send_for_approval(post_img, story_img, quote_data, on_approve):
         ]
     }
 
-    requests.post(
+    r = requests.post(
         "https://api.telegram.org/bot%s/sendMessage" % TELEGRAM_TOKEN,
         json={
             "chat_id":      TELEGRAM_CHAT_ID,
@@ -71,7 +71,7 @@ def send_for_approval(post_img, story_img, quote_data, on_approve):
         },
         timeout=15,
     )
-    log.info("Onay icin Telegram'a gonderildi.")
+    log.info("Mesaj gonderildi. HTTP %d: %s" % (r.status_code, r.text[:200]))
 
 def _send_msg(text):
     requests.post(
