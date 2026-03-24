@@ -43,12 +43,23 @@ def send_for_approval(post_img, story_img, quote_data, on_approve):
     # Tek blok — kopyalayip direkt yapistir
     preview = twitter_text[:280]
 
+    # Paylaşım linkleri
+    encoded = __import__('urllib.parse', fromlist=['quote']).parse.quote(twitter_text[:280])
+    fb_encoded = __import__('urllib.parse', fromlist=['quote']).parse.quote(
+        quote_data["quote"] + "\n\n— " + quote_data["author"] + "\n\n" + hashtags
+    )
+
     keyboard = {
-        "inline_keyboard": [[
-            {"text": "Yayinla", "callback_data": "yes_%s" % key},
-            {"text": "Atla",    "callback_data": "no_%s"  % key},
-            {"text": "Yenile",  "callback_data": "new_%s" % key},
-        ]]
+        "inline_keyboard": [
+            [
+                {"text": "Atla",    "callback_data": "no_%s"  % key},
+                {"text": "Yenile",  "callback_data": "new_%s" % key},
+            ],
+            [
+                {"text": "🐦 Twitter'da Paylaş",  "url": "https://twitter.com/intent/tweet?text=%s" % encoded},
+                {"text": "👍 Facebook'ta Paylaş", "url": "https://www.facebook.com/sharer/sharer.php?quote=%s" % fb_encoded},
+            ],
+        ]
     }
 
     requests.post(
