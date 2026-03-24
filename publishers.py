@@ -223,14 +223,6 @@ def publish_all(quote_data, post_img, story_img):
         hashtags,
     )
 
-    # WordPress
-    try:
-        wp_url = post_to_wordpress(quote_data, post_img)
-        if wp_url:
-            log.info("WordPress yayinlandi: %s" % wp_url)
-    except Exception as e:
-        log.error("WordPress hatasi: %s" % e, exc_info=True)
-
     # Instagram + Facebook (Meta key'leri varsa)
     if META_ACCESS_TOKEN and INSTAGRAM_ACCOUNT_ID and FACEBOOK_PAGE_ID:
         image_url = None
