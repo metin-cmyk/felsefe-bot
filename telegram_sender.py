@@ -7,19 +7,12 @@ log = logging.getLogger(__name__)
 TELEGRAM_TOKEN   = os.environ["TELEGRAM_TOKEN"]
 TELEGRAM_CHAT_ID = os.environ["TELEGRAM_CHAT_ID"]
 
-_approve_callback = None
-_pending = {}
 _last_offset = 0
 
-def set_approve_callback(fn):
-    global _approve_callback
-    _approve_callback = fn
-
-def send_for_approval(post_img, story_img, quote_data, on_approve):
+def send_notification(post_img, story_img, quote_data):
     key = "quote_%d" % int(__import__("time").time())
-    _pending[key] = (quote_data, post_img, story_img, on_approve)
 
-    # Post + Story görsellerini birlikte gonder (kaydetmek için bas-tut)
+    # Post + Story görsellerini birlikte gonder
     with open(post_img, "rb") as pf, open(story_img, "rb") as sf:
         requests.post(
             "https://api.telegram.org/bot%s/sendMediaGroup" % TELEGRAM_TOKEN,
@@ -32,23 +25,13 @@ def send_for_approval(post_img, story_img, quote_data, on_approve):
             timeout=30,
         )
 
-    # Metin + butonlar
-    hashtags = quote_data.get("hashtags", "#Felsefe #Bilgelik")
+    # Metin (Yalnızca bilgi amaçlı)
     twitter_text = quote_data.get("twitter") or quote_data["quote"]
-
-    # Tek blok — kopyalayip direkt yapistir
     preview = twitter_text[:280]
 
-    # Paylaşım linkleri
-    encoded    = url_quote(twitter_text[:280])
-    fb_text    = "%s\n\n— %s\n\n%s" % (quote_data["quote"], quote_data["author"], hashtags)
-    fb_encoded = url_quote(fb_text)
-
+    # Sadece Yeni İçerik Üret butonu kalıyor
     keyboard = {
         "inline_keyboard": [
-            [
-                {"text": "🐦 Twitter'da Paylaş", "url": "https://twitter.com/intent/tweet?text=%s" % encoded},
-            ],
             [
                 {"text": "🔄 Yeni İçerik Üret", "callback_data": "new_%s" % key},
             ],
@@ -98,28 +81,15 @@ def _poll():
                         timeout=10,
                     )
 
-                    if data.startswith("yes_"):
-                        key = data[4:]
-                        if key in _pending:
-                            qd, pi, si, fn = _pending.pop(key)
-                            _send_msg("Yayinlaniyor...")
-                            threading.Thread(target=fn, daemon=True).start()
-
-                    elif data.startswith("no_"):
-                        key = data[3:]
-                        _pending.pop(key, None)
-                        _send_msg("Atlandi.")
-
-                    elif data.startswith("new_"):
-                        key = data[4:]
-                        _pending.pop(key, None)
-                        _send_msg("Yeni icerik uretiliyor...")
+                    if data.startswith("new_"):
+                        _send_msg("Yeni icerik uretiliyor ve aninda yayinlaniyor...")
                         def _regen():
                             qd = generate_quote()
                             pi, pal = create_post_image(qd)
                             si = create_story_image(qd, pal)
                             from bot import _publish
-                            send_for_approval(pi, si, qd, lambda: _publish(qd, pi, si))
+                            _publish(qd, pi, si) # <-- Direk WordPress ve sosyal medyaya atar
+                            send_notification(pi, si, qd) # <-- Sonucu Telegram'a bildirir
                         threading.Thread(target=_regen, daemon=True).start()
 
                 # Komutlar
@@ -130,17 +100,18 @@ def _poll():
                     _send_msg(
                         "FelsefeCo Bot aktif!\n\n"
                         "Komutlar:\n"
-                        "/yeni - hemen yeni icerik uret\n"
+                        "/yeni - hemen yeni icerik uret ve yayinla\n"
                         "/durum - bot durumu"
                     )
                 elif text == "/yeni":
-                    _send_msg("Yeni icerik uretiliyor...")
+                    _send_msg("Yeni icerik uretiliyor ve aninda yayinlaniyor...")
                     def _gen():
                         qd = generate_quote()
                         pi, pal = create_post_image(qd)
                         si = create_story_image(qd, pal)
                         from bot import _publish
-                        send_for_approval(pi, si, qd, lambda: _publish(qd, pi, si))
+                        _publish(qd, pi, si) # <-- Direk WordPress ve sosyal medyaya atar
+                        send_notification(pi, si, qd) # <-- Sonucu Telegram'a bildirir
                     threading.Thread(target=_gen, daemon=True).start()
 
                 elif text == "/durum":
