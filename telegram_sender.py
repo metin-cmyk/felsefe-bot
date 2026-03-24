@@ -8,12 +8,11 @@ TELEGRAM_TOKEN   = os.environ["TELEGRAM_TOKEN"]
 TELEGRAM_CHAT_ID = os.environ["TELEGRAM_CHAT_ID"]
 
 _last_offset = 0
-_awaiting_count = False  # Botun sayı bekleyip beklemediğini tutan değişken
+_awaiting_count = False
 
 def send_notification(post_img, story_img, quote_data):
     key = "quote_%d" % int(time.time())
 
-    # Post + Story görsellerini birlikte gonder
     with open(post_img, "rb") as pf, open(story_img, "rb") as sf:
         requests.post(
             "https://api.telegram.org/bot%s/sendMediaGroup" % TELEGRAM_TOKEN,
@@ -26,11 +25,9 @@ def send_notification(post_img, story_img, quote_data):
             timeout=30,
         )
 
-    # Metin (Yalnızca bilgi amaçlı)
     twitter_text = quote_data.get("twitter") or quote_data["quote"]
     preview = twitter_text[:280]
 
-    # Yeni İçerik ve X Adet Üret Butonları
     keyboard = {
         "inline_keyboard": [
             [{"text": "🔄 Yeni İçerik Üret", "callback_data": "new_%s" % key}],
@@ -38,26 +35,16 @@ def send_notification(post_img, story_img, quote_data):
         ]
     }
 
-    r = requests.post(
-        "https://api.telegram.org/bot%s/sendMessage" % TELEGRAM_TOKEN,
-        json={
-            "chat_id":      TELEGRAM_CHAT_ID,
-            "text":         preview,
-            "reply_markup": keyboard,
-        },
-        timeout=15,
-    )
-    log.info("Mesaj gonderildi. HTTP %d: %s" % (r.status_code, r.text[:200]))
-
-def _send_msg(text):
     requests.post(
         "https://api.telegram.org/bot%s/sendMessage" % TELEGRAM_TOKEN,
-        data={"chat_id": TELEGRAM_CHAT_ID, "text": text},
-        timeout=10,
+        json={"chat_id": TELEGRAM_CHAT_ID, "text": preview, "reply_markup": keyboard},
+        timeout=15,
     )
 
+def _send_msg(text):
+    requests.post("https://api.telegram.org/bot%s/sendMessage" % TELEGRAM_TOKEN, data={"chat_id": TELEGRAM_CHAT_ID, "text": text}, timeout=10)
+
 def _process_single_generation():
-    """Tek bir icerik uretip yayinlama dongusu"""
     from quote_generator import generate_quote
     from image_generator import create_post_image, create_story_image
     from bot import _publish
@@ -70,7 +57,6 @@ def _process_single_generation():
 
 def _poll():
     global _last_offset, _awaiting_count
-
     while True:
         try:
             r = requests.get(
@@ -81,15 +67,10 @@ def _poll():
             for update in r.json().get("result", []):
                 _last_offset = update["update_id"]
 
-                # Buton tiklamalari
                 cb = update.get("callback_query", {})
                 if cb:
                     data = cb.get("data", "")
-                    requests.post(
-                        "https://api.telegram.org/bot%s/answerCallbackQuery" % TELEGRAM_TOKEN,
-                        data={"callback_query_id": cb["id"]},
-                        timeout=10,
-                    )
+                    requests.post("https://api.telegram.org/bot%s/answerCallbackQuery" % TELEGRAM_TOKEN, data={"callback_query_id": cb["id"]}, timeout=10)
 
                     if data.startswith("new_"):
                         _awaiting_count = False
@@ -98,65 +79,48 @@ def _poll():
 
                     elif data.startswith("multi_"):
                         _awaiting_count = True
-                        _send_msg("🔢 Kaç adet içerik üretmek ve peş peşe yayınlamak istiyorsun? Lütfen sadece bir sayı yaz (Örn: 5)")
+                        _send_msg("🔢 Kaç adet içerik üretmek istiyorsun? Lütfen sadece bir sayı yaz (Örn: 5)")
 
-                # Normal Mesaj (Komutlar veya Sayı Girişi)
                 msg = update.get("message", {})
                 text = msg.get("text", "").strip().lower()
 
-                if not text:
-                    continue
+                if not text: continue
 
-                # Eğer bot sayı bekliyorsa ve girilen metin rakamsa
                 if _awaiting_count:
                     if text.isdigit():
                         count = int(text)
                         _awaiting_count = False
-                        
-                        if 0 < count <= 20: # Limiti 20 ile sinirladim, istersen artirabilirsin
-                            _send_msg(f"⏳ {count} adet içerik üretimi başlıyor. API engeline takılmamak için her paylaşım arası 30 saniye beklenecektir...")
-                            
+                        if 0 < count <= 20:
+                            _send_msg(f"⏳ {count} adet içerik üretimi başlıyor. Her paylaşım arası 30 sn beklenecek...")
                             def _gen_multi(c):
                                 for i in range(c):
                                     _send_msg(f"🔄 Üretiliyor: {i+1} / {c}")
                                     _process_single_generation()
-                                    
-                                    # Sonuncu hariç aralarda bekle
-                                    if i < c - 1:
-                                        time.sleep(30)
-                                        
-                                _send_msg("✅ Toplu üretim ve yayınlama başarıyla tamamlandı!")
-                                
+                                    if i < c - 1: time.sleep(30)
+                                _send_msg("✅ Toplu üretim başarıyla tamamlandı!")
                             threading.Thread(target=_gen_multi, args=(count,), daemon=True).start()
                         else:
                             _send_msg("Lütfen 1 ile 20 arasında geçerli bir sayı girin.")
                     else:
                         _awaiting_count = False
-                        _send_msg("❌ Geçerli bir sayı girmediniz. Toplu üretim iptal edildi.")
-                    continue # Döngüye devam et, aşağıdaki komutlara geçme
+                        _send_msg("❌ Geçerli sayı girmediniz. İptal edildi.")
+                    continue
 
-                # Standart Komutlar
                 if text == "/start":
                     _awaiting_count = False
-                    _send_msg(
-                        "FelsefeCo Bot aktif!\n\n"
-                        "Komutlar:\n"
-                        "/yeni - hemen yeni icerik uret ve yayinla\n"
-                        "/durum - bot durumu"
-                    )
+                    _send_msg("FelsefeCo Bot aktif!\n/yeni - hemen uret\n/durum - bot durumu")
                 elif text == "/yeni":
                     _awaiting_count = False
-                    _send_msg("Yeni icerik uretiliyor ve aninda yayinlaniyor...")
+                    _send_msg("Yeni icerik uretiliyor...")
                     threading.Thread(target=_process_single_generation, daemon=True).start()
-
                 elif text == "/durum":
                     posted_file = Path("posted.json")
                     count = len(json.loads(posted_file.read_text())) if posted_file.exists() else 0
-                    _send_msg("Bot calisiyor!\nToplam paylasilan: %d\nZamanlama: 09:00, 13:00, 20:00" % count)
+                    _send_msg(f"Bot calisiyor!\nToplam paylasilan: {count}\nZamanlama: 09:00, 13:00, 20:00")
 
         except Exception as e:
             log.warning("Polling hatasi: %s" % e)
-            time.sleep(5) # Hata alirsa spamlama yapmamasi icin 5 sn bekle
+            time.sleep(5)
 
 def start_listener():
     t = threading.Thread(target=_poll, daemon=True)
