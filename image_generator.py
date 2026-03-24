@@ -8,6 +8,7 @@ OUTPUT_DIR.mkdir(exist_ok=True)
 
 SITE_HANDLE = "felsefemiz.net"
 
+# Font dosyaları projenin kendi klasöründe
 BASE_DIR = Path(__file__).parent
 FONT = {
     "bold":        BASE_DIR / "DejaVuSerif-Bold.ttf",
@@ -20,110 +21,231 @@ POST_SIZE  = (1080, 1350)
 STORY_SIZE = (1080, 1920)
 
 PALETTES = [
+    # --- Klasik Krem & Altin ---
     {"bg": "#F4E7C5", "text": "#2C1810", "accent": "#8B6914", "sub": "#6B4F12"},
     {"bg": "#EAD7A1", "text": "#1A1208", "accent": "#7A5C10", "sub": "#5C4510"},
-    {"bg": "#1C1C1C", "text": "#E8E8E8", "accent": "#BFA15F", "sub": "#8F8F8F"},
-    {"bg": "#2B2B2B", "text": "#F0F0F0", "accent": "#A38A52", "sub": "#A0A0A0"},
-    {"bg": "#121A21", "text": "#E6F0F9", "accent": "#5E8BA8", "sub": "#8BA6B8"},
-    {"bg": "#F9F6EE", "text": "#2C3539", "accent": "#5B7C8A", "sub": "#6D8794"}
+    {"bg": "#FDF6E3", "text": "#1C1008", "accent": "#B8860B", "sub": "#8B6914"},
+    {"bg": "#F5ECD7", "text": "#2C1810", "accent": "#A0522D", "sub": "#8B4513"},
+
+    # --- Koyu & Dramatik ---
+    {"bg": "#1A1A2E", "text": "#E8E0F0", "accent": "#C084FC", "sub": "#A855F7"},
+    {"bg": "#0F172A", "text": "#E2E8F0", "accent": "#818CF8", "sub": "#6366F1"},
+    {"bg": "#1E1B18", "text": "#F5F0E8", "accent": "#D97706", "sub": "#B45309"},
+    {"bg": "#12141A", "text": "#E8EAF0", "accent": "#60A5FA", "sub": "#3B82F6"},
+    {"bg": "#1A0A0A", "text": "#F5E8E8", "accent": "#F87171", "sub": "#EF4444"},
+    {"bg": "#0D1F0D", "text": "#E8F5E8", "accent": "#4ADE80", "sub": "#22C55E"},
+
+    # --- Gri & Minimal ---
+    {"bg": "#F8F9FA", "text": "#1A1A1A", "accent": "#495057", "sub": "#6C757D"},
+    {"bg": "#EAEAEA", "text": "#111111", "accent": "#333333", "sub": "#555555"},
+    {"bg": "#2D2D2D", "text": "#F0F0F0", "accent": "#CCCCCC", "sub": "#999999"},
+
+    # --- Pastel & Soft ---
+    {"bg": "#FFF0F3", "text": "#3D0010", "accent": "#C9184A", "sub": "#FF4D6D"},
+    {"bg": "#F0FFF4", "text": "#0A2E14", "accent": "#2D6A4F", "sub": "#40916C"},
+    {"bg": "#EFF6FF", "text": "#0A1628", "accent": "#1D4ED8", "sub": "#3B82F6"},
+    {"bg": "#FFF7ED", "text": "#2D1200", "accent": "#C2410C", "sub": "#EA580C"},
+    {"bg": "#F5F3FF", "text": "#1A0A2E", "accent": "#6D28D9", "sub": "#8B5CF6"},
+    {"bg": "#ECFDF5", "text": "#0A2618", "accent": "#065F46", "sub": "#059669"},
+
+    # --- Toprak & Doğa ---
+    {"bg": "#D4A373", "text": "#1A0A00", "accent": "#5C3317", "sub": "#7B4226"},
+    {"bg": "#A8763E", "text": "#FFF8F0", "accent": "#FFD700", "sub": "#FFC107"},
+    {"bg": "#8B7355", "text": "#FFF8F0", "accent": "#F5DEB3", "sub": "#DEB887"},
+    {"bg": "#4A3728", "text": "#F5E6D3", "accent": "#D4A373", "sub": "#C49A6C"},
+
+    # --- Gece Mavisi & Derin ---
+    {"bg": "#03045E", "text": "#CAF0F8", "accent": "#90E0EF", "sub": "#48CAE4"},
+    {"bg": "#023E8A", "text": "#E0F4FF", "accent": "#ADE8F4", "sub": "#90E0EF"},
+    {"bg": "#1B263B", "text": "#E0E8F5", "accent": "#778DA9", "sub": "#415A77"},
+    {"bg": "#0D1B2A", "text": "#E8F4FD", "accent": "#4A90D9", "sub": "#2E6DA4"},
+
+    # --- Mor & Mistik ---
+    {"bg": "#2D1B69", "text": "#EDE9FE", "accent": "#C4B5FD", "sub": "#A78BFA"},
+    {"bg": "#4A0E8F", "text": "#F3E8FF", "accent": "#E9D5FF", "sub": "#D8B4FE"},
+    {"bg": "#F3E8FF", "text": "#1A0A2E", "accent": "#7C3AED", "sub": "#6D28D9"},
+
+    # --- Sıcak & Enerjik ---
+    {"bg": "#FFF3E0", "text": "#1A0800", "accent": "#E65100", "sub": "#F57C00"},
+    {"bg": "#FFEBEE", "text": "#1A0000", "accent": "#C62828", "sub": "#D32F2F"},
+    {"bg": "#FCE4EC", "text": "#1A0010", "accent": "#AD1457", "sub": "#C2185B"},
+
+    # --- Zeytin & Haki ---
+    {"bg": "#3B4A2F", "text": "#F0F5E8", "accent": "#A8C570", "sub": "#8BAF4E"},
+    {"bg": "#556B2F", "text": "#F5F0E0", "accent": "#F0E68C", "sub": "#DAA520"},
+    {"bg": "#F0F2E6", "text": "#1A1E0A", "accent": "#4B5320", "sub": "#6B7340"},
+
+    # --- Pembe & Rose ---
+    {"bg": "#FDF2F8", "text": "#2D0A1E", "accent": "#9D174D", "sub": "#BE185D"},
+    {"bg": "#831843", "text": "#FDF2F8", "accent": "#FBCFE8", "sub": "#F9A8D4"},
+
+    # --- Cyan & Teal ---
+    {"bg": "#ECFEFF", "text": "#0A1E1F", "accent": "#0E7490", "sub": "#0891B2"},
+    {"bg": "#134E4A", "text": "#F0FDFA", "accent": "#5EEAD4", "sub": "#2DD4BF"},
 ]
 
-def _font(size, style="regular"):
-    return ImageFont.truetype(str(FONT[style]), size)
+def _hex(h):
+    h = h.lstrip("#")
+    return tuple(int(h[i:i+2], 16) for i in (0, 2, 4))
+
+def _font(size, style="bold"):
+    path = FONT.get(style, FONT["bold"])
+    if path.exists():
+        return ImageFont.truetype(str(path), size)
+    return ImageFont.load_default()
 
 def _make_image(size, quote_data, palette):
     w, h = size
-    img  = Image.new("RGB", size, palette["bg"])
+    bg_color   = _hex(palette["bg"])
+    text_color = _hex(palette["text"])
+    accent     = _hex(palette["accent"])
+    sub_color  = _hex(palette["sub"])
+
+    img  = Image.new("RGB", size, bg_color)
     draw = ImageDraw.Draw(img)
 
-    margin = 80
-    draw.rectangle([margin, margin, w-margin, h-margin], outline=palette["accent"], width=4)
-
-    quote  = quote_data["quote"]
-    author = quote_data["author"]
+    quote  = quote_data.get("quote", "")
+    author = quote_data.get("author", "")
     akim   = quote_data.get("akim", "")
 
-    # Fontlar -4 punto küçültüldü
-    quote_len = len(quote)
-    if quote_len < 80:     f_quote, wrap_w = _font(78, "bold_italic"), 20
-    elif quote_len < 160:  f_quote, wrap_w = _font(64, "bold_italic"), 25
-    else:                  f_quote, wrap_w = _font(56, "bold_italic"), 32
+    quoted_text = "\u201c%s\u201d" % quote
 
-    wrapped_quote = textwrap.fill(quote, width=wrap_w)
-    
-    bbox_q = draw.multiline_textbbox((0,0), wrapped_quote, font=f_quote, align="center")
-    qw = bbox_q[2] - bbox_q[0]
-    qh = bbox_q[3] - bbox_q[1]
-    quote_y = (h - qh) // 2 - 120
+    # Geniş kenar boşluğu
+    margin    = 110
+    usable_w  = w - (margin * 2)
 
-    draw.multiline_text(((w-qw)//2, quote_y), wrapped_quote, font=f_quote, fill=palette["text"], align="center")
+    # Font ve satır yüksekliği (-4 Punto Küçültüldü: 82 -> 78)
+    f_q = _font(78, "bold")
+    lh  = 105
 
-    line_y = quote_y + qh + 80
-    draw.line([(w//2 - 60, line_y), (w//2 + 60, line_y)], fill=palette["accent"], width=3)
+    # Satırları sar — piksel bazlı
+    words   = quoted_text.split()
+    lines   = []
+    current = ""
+    for word in words:
+        test = (current + " " + word).strip()
+        bbox = draw.textbbox((0,0), test, font=f_q)
+        if bbox[2] - bbox[0] > usable_w and current:
+            lines.append(current)
+            current = word
+        else:
+            current = test
+    if current:
+        lines.append(current)
 
-    f_author = _font(52, "italic")
+    # Çok uzunsa küçük font (-4 Punto Küçültüldü: 68 -> 64)
+    if len(lines) > 6:
+        f_q = _font(64, "bold")
+        lh  = 88
+        lines = []
+        current = ""
+        for word in words:
+            test = (current + " " + word).strip()
+            bbox = draw.textbbox((0,0), test, font=f_q)
+            if bbox[2] - bbox[0] > usable_w and current:
+                lines.append(current)
+                current = word
+            else:
+                current = test
+        if current:
+            lines.append(current)
+
+    total_h = len(lines) * lh
+    y = int(h * 0.42) - total_h // 2
+
+    for line in lines:
+        bbox = draw.textbbox((0,0), line, font=f_q)
+        lw   = bbox[2] - bbox[0]
+        x    = (w - lw) // 2
+        draw.text((x, y), line, font=f_q, fill=text_color)
+        y += lh
+
+    # Ayraç
+    line_y = y + 45
+    draw.rectangle([(w//2)-70, line_y, (w//2)+70, line_y+2], fill=accent)
+
+    # Yazar (-4 Punto Küçültüldü: 56 -> 52)
+    f_author    = _font(52, "italic")
     author_text = "— %s" % author
-    bbox_a = draw.textbbox((0,0), author_text, font=f_author)
-    aw = bbox_a[2] - bbox_a[0]
-    draw.text(((w-aw)//2, line_y+22), author_text, font=f_author, fill=palette["accent"])
+    bbox        = draw.textbbox((0,0), author_text, font=f_author)
+    aw          = bbox[2] - bbox[0]
+    draw.text(((w-aw)//2, line_y+22), author_text, font=f_author, fill=accent)
 
+    # Akım (-4 Punto Küçültüldü: 40 -> 36)
     f_akim = _font(36, "regular")
-    bbox_ak = draw.textbbox((0,0), akim, font=f_akim)
-    akw = bbox_ak[2] - bbox_ak[0]
-    draw.text(((w-akw)//2, line_y+96), akim, font=f_akim, fill=palette["sub"])
+    bbox   = draw.textbbox((0,0), akim, font=f_akim)
+    aw2    = bbox[2] - bbox[0]
+    draw.text(((w-aw2)//2, line_y+96), akim, font=f_akim, fill=sub_color)
 
+    # felsefemiz.net (-4 Punto Küçültüldü: 46 -> 42)
     handle_y = int(h * 0.87)
     f_handle = _font(42, "bold")
-    bbox_h = draw.textbbox((0,0), SITE_HANDLE, font=f_handle)
-    hw = bbox_h[2] - bbox_h[0]
-    draw.text(((w-hw)//2, handle_y), SITE_HANDLE, font=f_handle, fill=palette["sub"])
+    bbox     = draw.textbbox((0,0), SITE_HANDLE, font=f_handle)
+    hw       = bbox[2] - bbox[0]
+    draw.text(((w-hw)//2, handle_y), SITE_HANDLE, font=f_handle, fill=sub_color)
 
     return img
 
 def create_post_image(quote_data, palette=None):
-    if palette is None: palette = random.choice(PALETTES)
-    img = _make_image(POST_SIZE, quote_data, palette)
-    safe = re.sub(r"[^a-z0-9]", "_", quote_data["author"].lower())[:20]
-    filepath = OUTPUT_DIR / f"post_{safe}_{int(time.time())}.jpg"
-    img.save(filepath, "JPEG", quality=90)
-    return str(filepath), palette
+    if palette is None:
+        palette = random.choice(PALETTES)
+    img      = _make_image(POST_SIZE, quote_data, palette)
+    safe     = re.sub(r"[^a-z0-9]", "_", quote_data.get("author","x").lower())[:20]
+    filename = "post_%s_%d.jpg" % (safe, int(time.time()))
+    path     = OUTPUT_DIR / filename
+    img.save(str(path), "JPEG", quality=95)
+    return path, palette
 
 def create_story_image(quote_data, palette):
-    img = _make_image(STORY_SIZE, quote_data, palette)
-    safe = re.sub(r"[^a-z0-9]", "_", quote_data["author"].lower())[:20]
-    filepath = OUTPUT_DIR / f"story_{safe}_{int(time.time())}.jpg"
-    img.save(filepath, "JPEG", quality=90)
-    return str(filepath)
+    img      = _make_image(STORY_SIZE, quote_data, palette)
+    safe     = re.sub(r"[^a-z0-9]", "_", quote_data.get("author","x").lower())[:20]
+    filename = "story_%s_%d.jpg" % (safe, int(time.time()))
+    path     = OUTPUT_DIR / filename
+    img.save(str(path), "JPEG", quality=95)
+    return path
 
 def create_square_cover(title, subtitle="Felsefe Ansiklopedisi"):
-    """Kategoriler ve Filozoflar icin ACF Kapak Gorseli uretir"""
+    """Kategoriler ve Filozoflar icin 1080x1080 ACF Kapak Gorseli uretir."""
     palette = random.choice(PALETTES)
     w, h = 1080, 1080
-    img = Image.new("RGB", (w, h), palette["bg"])
+
+    bg_color   = _hex(palette["bg"])
+    text_color = _hex(palette["text"])
+    accent     = _hex(palette["accent"])
+    sub_color  = _hex(palette["sub"])
+
+    img = Image.new("RGB", (w, h), bg_color)
     draw = ImageDraw.Draw(img)
 
+    # Kenarlik (Cerceve)
     margin = 60
-    draw.rectangle([margin, margin, w-margin, h-margin], outline=palette["accent"], width=6)
+    draw.rectangle([margin, margin, w-margin, h-margin], outline=accent, width=6)
 
+    # Baslik (Kategori veya Filozof Adi)
     f_title = _font(90, "bold")
     wrapped_title = textwrap.fill(title, width=15)
-    
-    bbox = draw.multiline_textbbox((0, 0), wrapped_title, font=f_title, align="center")
-    tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
-    title_y = (h - th) // 2 - 50
-    draw.multiline_text(((w - tw)//2, title_y), wrapped_title, font=f_title, fill=palette["text"], align="center")
 
+    bbox = draw.multiline_textbbox((0, 0), wrapped_title, font=f_title, align="center")
+    tw = bbox[2] - bbox[0]
+    th = bbox[3] - bbox[1]
+    title_y = (h - th) // 2 - 50
+    draw.multiline_text(((w - tw)//2, title_y), wrapped_title, font=f_title, fill=text_color, align="center")
+
+    # Alt Baslik
     f_sub = _font(40, "italic")
     bbox_sub = draw.textbbox((0, 0), subtitle, font=f_sub)
     sw = bbox_sub[2] - bbox_sub[0]
-    draw.text(((w - sw)//2, title_y + th + 60), subtitle, font=f_sub, fill=palette["sub"])
+    draw.text(((w - sw)//2, title_y + th + 60), subtitle, font=f_sub, fill=sub_color)
 
-    f_handle = _font(36, "regular")
+    # Site adi
+    f_handle = _font(42, "bold")
     bbox_h = draw.textbbox((0, 0), SITE_HANDLE, font=f_handle)
     hw = bbox_h[2] - bbox_h[0]
-    draw.text(((w - hw)//2, h - margin - 50), SITE_HANDLE, font=f_handle, fill=palette["accent"])
+    draw.text(((w - hw)//2, h - margin - 50), SITE_HANDLE, font=f_handle, fill=accent)
 
     safe_name = re.sub(r"[^a-z0-9]", "_", title.lower())
-    filepath = OUTPUT_DIR / f"cover_{safe_name}_{int(time.time())}.jpg"
-    img.save(filepath, "JPEG", quality=90)
+    filename = "cover_%s_%d.jpg" % (safe_name[:20], int(time.time()))
+    filepath = OUTPUT_DIR / filename
+    img.save(str(filepath), "JPEG", quality=95)
+    
     return str(filepath)
