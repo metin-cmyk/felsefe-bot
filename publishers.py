@@ -11,6 +11,45 @@ WP_URL      = os.environ.get("WP_URL", "https://felsefemiz.net")
 WP_USER     = os.environ.get("WP_USER", "serezart")
 WP_APP_PASS = os.environ.get("WP_APP_PASS", "")
 
+def _get_or_create_wp_category(category_name):
+    """Sitede kategori var mı diye bakar, yoksa oluşturur ve ID'sini döndürür."""
+    if not WP_APP_PASS or not category_name:
+        return None
+
+    try:
+        # 1. Kategoriyi Ara
+        search_url = "%s/wp-json/wp/v2/categories?search=%s" % (WP_URL, category_name)
+        r = requests.get(search_url, auth=(WP_USER, WP_APP_PASS), timeout=30)
+        
+        if r.status_code == 200:
+            categories = r.json()
+            # Tam eşleşen kategoriyi bul (büyük/küçük harf duyarsız)
+            for cat in categories:
+                if cat["name"].lower() == category_name.lower():
+                    log.info("WP Kategori bulundu: %s (ID: %s)" % (category_name, cat["id"]))
+                    return cat["id"]
+
+        # 2. Bulunamadıysa Yeni Kategori Oluştur
+        log.info("WP Kategori bulunamadi, olusturuluyor: %s" % category_name)
+        create_url = "%s/wp-json/wp/v2/categories" % WP_URL
+        r_create = requests.post(
+            create_url,
+            auth=(WP_USER, WP_APP_PASS),
+            json={"name": category_name},
+            timeout=30
+        )
+        if r_create.status_code == 201:
+            cat_id = r_create.json()["id"]
+            log.info("WP Kategori basariyla olusturuldu (ID: %s)" % cat_id)
+            return cat_id
+        else:
+            log.warning("WP Kategori olusturulamadi: HTTP %d" % r_create.status_code)
+
+    except Exception as e:
+        log.error("Kategori sorgulama/olusturma hatasi: %s" % e)
+        
+    return None
+
 def _wp_upload_image(image_path):
     """Görseli WordPress media kütüphanesine yükle, media ID döndür."""
     if not WP_APP_PASS:
@@ -41,11 +80,12 @@ def post_to_wordpress(quote_data, post_img):
         return None
 
     hashtags = quote_data.get("hashtags", "#Felsefe #Bilgelik")
+    akim = quote_data.get("akim", "")
 
     # Başlık: sözün ilk 60 karakteri
     title = quote_data["quote"][:60]
 
-    # İçerik: tam söz + yazar + akım + açıklama + hashtagler
+    # İçerik
     aciklama = quote_data.get("aciklama", "")
     content = """<blockquote>
 <p>%s</p>
@@ -57,10 +97,14 @@ def post_to_wordpress(quote_data, post_img):
 <p>%s</p>""" % (
         quote_data["quote"],
         quote_data["author"],
-        quote_data["akim"],
+        akim,
         aciklama,
         hashtags,
     )
+
+    # Kategoriyi ayarla (Bul veya oluştur)
+    cat_id = _get_or_create_wp_category(akim)
+    categories = [cat_id] if cat_id else []
 
     # Önce görseli yükle
     media_id = None
@@ -69,12 +113,12 @@ def post_to_wordpress(quote_data, post_img):
     except Exception as e:
         log.error("WP gorsel yuklenemedi: %s" % e, exc_info=True)
 
-    # Post oluştur
+    # Post oluştur (Kategori eklendi!)
     post_data = {
         "title":   title,
         "content": content,
         "status":  "publish",
-        "categories": [],
+        "categories": categories,
     }
     if media_id:
         post_data["featured_media"] = media_id
@@ -223,7 +267,7 @@ def publish_all(quote_data, post_img, story_img):
         hashtags,
     )
 
-    # Instagram + Facebook (Meta key'leri varsa)
+    # Instagram + Facebook
     if META_ACCESS_TOKEN and INSTAGRAM_ACCOUNT_ID and FACEBOOK_PAGE_ID:
         image_url = None
         try:
