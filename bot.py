@@ -45,10 +45,7 @@ def run():
         post_img, palette = create_post_image(quote_data)
         story_img  = create_story_image(quote_data, palette)
 
-        # Önce WordPress ve sosyal medyada anında yayınla
         _publish(quote_data, post_img, story_img)
-        
-        # Ardından Telegram'a görselleri ve Yeni Üret butonunu gönder
         send_notification(post_img=post_img, story_img=story_img, quote_data=quote_data)
         
     except Exception as e:
@@ -56,7 +53,6 @@ def run():
 
 def _publish(quote_data, post_img, story_img):
     try:
-        from publishers import publish_all, post_to_wordpress
         wp_url = post_to_wordpress(quote_data, post_img)
         publish_all(quote_data, post_img, story_img)
         posted = load_posted()
@@ -81,8 +77,6 @@ def _publish(quote_data, post_img, story_img):
 
 def main():
     log.info("FelsefeCo Bot basliyor...")
-
-    # Listener'ı başlat
     start_listener()
 
     for t in SCHEDULE:
