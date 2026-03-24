@@ -1,4 +1,5 @@
 import os, re, random, anthropic
+from datetime import datetime
 
 client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
 
@@ -71,7 +72,7 @@ KONULAR = [
     "Kaderi sevmek (Amor Fati) ve başımıza gelen her şeyi kucaklamak", "Yaşamın trajik boyutu ve bunu kabullenmenin zarafeti",
     "Sisyphos'un kayayı tepeye çıkarırkenki gizli mutluluğu", "Var olmanın dayanılmaz hafifliği ve kararsızlık",
     "Kendi kendine doğmuş olma yanılgısı ve kökeni inkar", "Sürekli bir 'olma' halinde olup asla 'tamamlanamamak'",
-    "Evrenin sağır sessizliği karşısında insanın çığlığı", "Ölümün varlığı sayesinde hayatın kıymetlenmesi paradoksu",
+    "Evrenin sağır sessizliği karşısında insanın çığlığı", "Ölümın varlığı sayesinde hayatın kıymetlenmesi paradoksu",
     
     # 🎭 İÇ DÜNYA, PSİKOLOJİ, EGO, KİMLİK VE GÖLGE BENLİK
     "Ego, kibir ve insanın kendi kendini kandırma sanatı", "Yalnızlığın yaratıcı gücü vs. yıkıcı ve çürütücü tarafı",
@@ -143,12 +144,35 @@ KONULAR = [
 ]
 
 def generate_quote():
-    # Atatürk'e %20 oranında KESİN öncelik veriyoruz
-    if random.random() < 0.20:
+    # Güncel tarihi kontrol et (Ay ve Gün)
+    bugun = datetime.now()
+    ay = bugun.month
+    gun = bugun.day
+    
+    # MİLLİ BAYRAM / ANMA GÜNÜ KONTROLÜ
+    ozel_gun_mesaji = None
+    
+    if ay == 11 and gun == 10:
+        ozel_gun_mesaji = "BUGÜN 10 KASIM, ATATÜRK'Ü ANMA GÜNÜ. Söz doğrudan onun fikirlerinin ölümsüzlüğü, hüznün kararlılığa dönüşmesi ve Cumhuriyet'in sonsuz bekası üzerine son derece etkileyici, asil ve sarsıcı bir mesaj içermeli."
+    elif ay == 10 and gun == 29:
+        ozel_gun_mesaji = "BUGÜN 29 EKİM CUMHURİYET BAYRAMI. Söz doğrudan Cumhuriyet'in fazileti, milletin bağımsızlık karakteri, aydınlanma, çağdaşlaşma ve egemenlik üzerine çok coşkulu, devrimci bir mesaj içermeli."
+    elif ay == 8 and gun == 30:
+        ozel_gun_mesaji = "BUGÜN 30 AĞUSTOS ZAFER BAYRAMI. Söz doğrudan Türk milletinin ve ordusunun bağımsızlık azmi, esarete karşı isyanı, emperyalizme vurulan tokat ve hürriyetin kutsallığı üzerine destansı bir mesaj içermeli."
+    elif ay == 5 and gun == 19:
+        ozel_gun_mesaji = "BUGÜN 19 MAYIS. Söz doğrudan kurtuluş ateşinin yakılması, gençliğe duyulan güven, umut, akılcılık ve Türkiye'nin aydınlık geleceği üzerine motive edici bir mesaj içermeli."
+    elif ay == 4 and gun == 23:
+        ozel_gun_mesaji = "BUGÜN 23 NİSAN. Söz doğrudan kayıtsız şartsız milli egemenlik, çocuklara ve geleceğe bırakılan aydınlık miras, meclisin ve demokrasinin gücü üzerine olmalı."
+
+    # Karar Mekanizması
+    if ozel_gun_mesaji:
+        # EĞER BUGÜN MİLLİ BİR GÜNSE: %100 oranında sadece Atatürk paylaşımı yapılır!
+        akim = "Türk Düşünce Tarihi / Cumhuriyet ve Aydınlanma"
+        filozof = "Mustafa Kemal Atatürk"
+        konu = ozel_gun_mesaji
+    elif random.random() < 0.20:
+        # NORMAL GÜNLERDE: %20 İhtimalle yine Atatürk
         akim = "Türk Düşünce Tarihi / Aydınlanma"
         filozof = "Mustafa Kemal Atatürk"
-        
-        # Atatürk'ün felsefesine tam oturacak, onun vizyonuna özel konular
         ataturk_konulari = [
             "Akıl ve bilimin dogmalara karşı kazandığı mutlak zafer", 
             "Tam bağımsızlık, hürriyet ve bir ulusun kendi kaderini yazması", 
@@ -163,21 +187,18 @@ def generate_quote():
         ]
         konu = random.choice(ataturk_konulari)
     else:
-        # Kalan %80 ihtimalle diğer devasa kombinasyonlardan birini seç
+        # NORMAL GÜNLERDE: Kalan %80 ihtimalle diğer devasa kombinasyonlardan birini seç
         akim = random.choice(AKIMLAR)
-        
-        # Diğerlerinde %80 bilindik isim, %20 Claude'un kendi seçeceği az bilinen isim
         if akim in FILOZOFLAR and FILOZOFLAR[akim] and random.random() < 0.8:
             filozof = random.choice(FILOZOFLAR[akim])
         else:
             filozof = "bu felsefi akımdan, tarihi kaynaklarda adı az geçen, gölgede kalmış ama çok derin bir düşünür"
-            
         konu = random.choice(KONULAR)
 
     system = """Sen dünyaca ünlü, ansiklopedik bilgiye sahip bir felsefe profesörü ve bilgesin.
 Sana verilen akım, düşünür ve konu bağlamında; derinlikli, ufuk açıcı, daha önce internette klişeleşmemiş ÖZGÜN bir felsefi/vizyoner söz üret.
 
-Eğer düşünür Mustafa Kemal Atatürk ise; sözü onun akılcı, bilimsel, çağdaş, bağımsızlıkçı ve kararlı karakterine, onun muazzam devrimci felsefesine uygun, çok güçlü ve sarsıcı bir üslupla yaz.
+Eğer düşünür Mustafa Kemal Atatürk ise; sözü onun akılcı, bilimsel, çağdaş, bağımsızlıkçı ve kararlı karakterine, onun muazzam devrimci felsefesine uygun, çok güçlü ve sarsıcı bir üslupla yaz. Sana verilen günün anlam ve önemini (örneğin 10 Kasım veya 29 Ekim ise) kesinlikle dikkate alarak o ruha uygun bir metin çıkar.
 
 Eğer senden "az bilinen, gölgede kalmış bir düşünür" istenmişse, gerçekten tarihte yaşamış ama popüler olmayan bir ismi bul ve sözü onun ağzından, onun felsefesine sadık kalarak yaz.
 
