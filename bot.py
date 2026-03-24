@@ -1,99 +1,44 @@
-import os, json, logging, schedule, time
-from pathlib import Path
-from datetime import datetime
+import os
+import telebot
+from publishers import send_to_wordpress, send_to_telegram
 
-from quote_generator import generate_quote
-from image_generator import create_post_image, create_story_image
-from publishers import publish_all, post_to_wordpress
-from telegram_sender import send_for_approval, set_approve_callback, start_listener
+# Railway Variables kısmından tokenı alır
+TOKEN = os.getenv('TELEGRAM_TOKEN')
+bot = telebot.TeleBot(TOKEN)
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s",
-    handlers=[logging.FileHandler("bot.log", encoding="utf-8"), logging.StreamHandler()]
-)
-log = logging.getLogger(__name__)
+@bot.message_handler(commands=['start', 'help'])
+def send_welcome(message):
+    bot.reply_to(message, "Felsefe Botu Hazır!\n\nKullanım:\n/paylas Başlık | İçerik")
 
-POSTED_FILE = Path("posted.json")
-
-SCHEDULE = [
-    "09:00",
-    "13:00",
-    "20:00",
-]
-
-def load_posted():
-    if POSTED_FILE.exists():
-        return json.loads(POSTED_FILE.read_text())
-    return []
-
-def save_posted(posted):
-    POSTED_FILE.write_text(json.dumps(posted, ensure_ascii=False, indent=2))
-
-def run():
-    hour = datetime.now().hour
-    if hour < 8 or hour >= 23:
-        log.info("Gece modu, atlaniyor.")
-        return
-
-    log.info("Yeni icerik uretiliyor...")
-
+@bot.message_handler(commands=['paylas'])
+def handle_paylas(message):
     try:
-        quote_data = generate_quote()
-        log.info("Soz uretildi: %s" % quote_data["quote"][:50])
+        # Mesajı Başlık ve İçerik olarak ayır
+        raw_text = message.text.replace('/paylas ', '')
+        if "|" not in raw_text:
+            bot.reply_to(message, "Lütfen şu formatta yazın: /paylas Başlık | İçerik")
+            return
 
-        post_img, palette = create_post_image(quote_data)
-        story_img  = create_story_image(quote_data, palette)
+        baslik, icerik = raw_text.split('|', 1)
+        baslik = baslik.strip()
+        icerik = icerik.strip()
 
-        send_for_approval(
-            post_img=post_img,
-            story_img=story_img,
-            quote_data=quote_data,
-            on_approve=lambda: _publish(quote_data, post_img, story_img),
-        )
+        bot.reply_to(message, "⏳ İşlem başlatıldı, siteye yükleniyor...")
+
+        # 1. ADIM: Siteye (WordPress) Gönder
+        basari, sonuc_mesaji = send_to_wordpress(baslik, icerik)
+
+        if basari:
+            # 2. ADIM: Başarılıysa Telegram'a da bilgi ver
+            onay_metni = f"✅ *Sitede Yayınlandı!*\n\n*Başlık:* {baslik}\n*İçerik:* {icerik[:100]}..."
+            bot.send_message(message.chat.id, onay_metni, parse_mode="Markdown")
+        else:
+            # Hata varsa detaylı bildir
+            bot.send_message(message.chat.id, f"❌ Siteye yüklenemedi!\n{sonuc_mesaji}")
+
     except Exception as e:
-        log.error("Hata: %s" % e, exc_info=True)
-
-def _publish(quote_data, post_img, story_img):
-    try:
-        from publishers import publish_all, post_to_wordpress
-        wp_url = post_to_wordpress(quote_data, post_img)
-        publish_all(quote_data, post_img, story_img)
-        posted = load_posted()
-        posted.append({
-            "quote": quote_data["quote"],
-            "author": quote_data["author"],
-            "time": datetime.now().isoformat(),
-            "wp_url": wp_url or "",
-        })
-        save_posted(posted)
-        msg = "✅ Yayinlandi!"
-        if wp_url:
-            msg += "\n\n🌐 WordPress: %s" % wp_url
-        log.info(msg)
-        try:
-            from telegram_sender import _send_msg
-            _send_msg(msg)
-        except Exception:
-            pass
-    except Exception as e:
-        log.error("Yayinlama hatasi: %s" % e, exc_info=True)
-
-def main():
-    log.info("FelsefeCo Bot basliyor...")
-
-    set_approve_callback(_publish)
-    start_listener()
-
-    for t in SCHEDULE:
-        schedule.every().day.at(t).do(run)
-
-    if os.getenv("RUN_NOW", "false") == "true":
-        run()
-
-    while True:
-        schedule.run_pending()
-        time.sleep(30)
+        bot.reply_to(message, f"Sistemsel bir hata oluştu: {str(e)}")
 
 if __name__ == "__main__":
-    main()
+    print("Bot aktif ve dinlemede...")
+    bot.infinity_polling()
