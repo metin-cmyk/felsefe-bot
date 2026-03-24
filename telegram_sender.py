@@ -19,21 +19,16 @@ def send_for_approval(post_img, story_img, quote_data, on_approve):
     key = "quote_%d" % int(__import__("time").time())
     _pending[key] = (quote_data, post_img, story_img, on_approve)
 
-    # Post gorseli gonder
-    with open(post_img, "rb") as f:
+    # Post + Story görsellerini birlikte gonder (kaydetmek için bas-tut)
+    with open(post_img, "rb") as pf, open(story_img, "rb") as sf:
         requests.post(
-            "https://api.telegram.org/bot%s/sendPhoto" % TELEGRAM_TOKEN,
-            data={"chat_id": TELEGRAM_CHAT_ID, "caption": "POST GORSELI"},
-            files={"photo": f},
-            timeout=30,
-        )
-
-    # Story gorseli gonder
-    with open(story_img, "rb") as f:
-        requests.post(
-            "https://api.telegram.org/bot%s/sendPhoto" % TELEGRAM_TOKEN,
-            data={"chat_id": TELEGRAM_CHAT_ID, "caption": "STORY GORSELI"},
-            files={"photo": f},
+            "https://api.telegram.org/bot%s/sendMediaGroup" % TELEGRAM_TOKEN,
+            data={"chat_id": TELEGRAM_CHAT_ID},
+            files={
+                "media": (None, '[{"type":"photo","media":"attach://post","caption":"📐 POST (1080x1350)"},{"type":"photo","media":"attach://story","caption":"📱 STORY (1080x1920)"}]'),
+                "post":  ("post.jpg",  pf, "image/jpeg"),
+                "story": ("story.jpg", sf, "image/jpeg"),
+            },
             timeout=30,
         )
 
@@ -52,12 +47,10 @@ def send_for_approval(post_img, story_img, quote_data, on_approve):
     keyboard = {
         "inline_keyboard": [
             [
-                {"text": "Atla",    "callback_data": "no_%s"  % key},
-                {"text": "Yenile",  "callback_data": "new_%s" % key},
+                {"text": "🐦 Twitter'da Paylaş", "url": "https://twitter.com/intent/tweet?text=%s" % encoded},
             ],
             [
-                {"text": "🐦 Twitter'da Paylaş",  "url": "https://twitter.com/intent/tweet?text=%s" % encoded},
-                {"text": "👍 Facebook'ta Paylaş", "url": "https://www.facebook.com/sharer/sharer.php?quote=%s" % fb_encoded},
+                {"text": "🔄 Yeni İçerik Üret", "callback_data": "new_%s" % key},
             ],
         ]
     }
