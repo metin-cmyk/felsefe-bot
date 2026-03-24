@@ -43,19 +43,61 @@ FILOZOFLAR = {
 }
 
 KONULAR = [
-    "hayatın anlamı", "özgürlük", "mutluluk", "acı ve büyüme",
-    "sabır ve direniş", "anda yaşamak", "iç huzur", "cesaret",
-    "değişim ve dönüşüm", "benlik", "sevgi", "ölüm ve ölümsüzlük",
-    "bilgelik", "doğa ile uyum", "ego ve özbenlik",
-    "yalnızlık", "sessizlik", "özgün olmak", "toplum ve birey",
-    "adalet", "ahlak", "vicdan", "sorumluluk", "affetmek",
-    "geçmişi bırakmak", "belirsizlik", "kaygı ve korku",
-    "yaratıcılık", "emek ve anlam", "beden ve ruh",
-    "sezgi", "bilinç", "uyku ve rüya", "zaman",
-    "dostluk", "aşk", "kayıp ve yas", "şükran",
-    "merak", "öğrenmek", "sadelik", "alçakgönüllülük",
-    "güç ve iktidar", "direniş", "umut", "hayal kırıklığı",
-    "kimlik", "hafıza", "dil ve anlam", "sessiz bilgelik",
+    # Varoluş & Anlam
+    "hayatın anlamı", "varoluşun saçmalığı", "ölüm karşısında yaşamak",
+    "anlamsızlıkla yüzleşmek", "ölümsüzlük arzusu", "zamanın akışı",
+    "şimdiki an", "geçmişin ağırlığı", "geleceğin belirsizliği",
+
+    # Benlik & Kimlik
+    "benlik", "kimlik", "ego ve özbenlik", "özgün olmak",
+    "maskelerin ardındaki gerçek yüz", "içimizdeki yabancı",
+    "kendinle barışmak", "kendini tanımak", "dönüşüm ve yeniden doğuş",
+
+    # Duygu & Deneyim
+    "acı ve büyüme", "yalnızlık", "sessizlik", "özlem",
+    "aşk ve bağlılık", "kıskançlık ve özgürlük", "kayıp ve yas",
+    "hayal kırıklığı", "öfke ve dönüşüm", "utanç ve onur",
+    "kırgınlık ve affetmek", "minnet ve şükran", "sevinç ve hafiflik",
+
+    # İlişkiler & Toplum
+    "dostluk", "sevgi", "yabancılaşma", "toplum ve birey",
+    "aile ve bağlar", "güven ve ihanet", "empati ve merhamet",
+    "yalnız kalabalıklar", "dijital çağda insan olmak",
+    "sosyal medya ve kimlik", "modern insanın kaygıları",
+
+    # Özgürlük & Güç
+    "özgürlük", "direniş", "güç ve iktidar", "boyun eğmek ya da isyan",
+    "vicdan", "adalet", "eşitsizlik", "cesaret", "sorumluluk",
+    "baskı altında var olmak", "sistemin içinde kaybolmak",
+
+    # Zihin & Bilgi
+    "bilinç", "sezgi", "merak", "öğrenmek ve unutmak",
+    "dil ve anlam", "gerçek ve yanılsama", "bilgi ve cehalet",
+    "şüphe etmenin gücü", "akıl ve duygu", "rüyalar ve bilinçdışı",
+
+    # Doğa & Evren
+    "doğa ile uyum", "evrenin sessizliği", "chaos ve düzen",
+    "döngüler ve yenilenme", "ölüm ve doğa", "bütünle bağlantı",
+
+    # Başarı & Emek
+    "emek ve anlam", "yaratıcılık", "başarı ve boşluk",
+    "hırs ve tatmin", "mükemmeliyetçilik", "bırakmayı öğrenmek",
+    "sabır", "alçakgönüllülük", "sadelik",
+
+    # Ruh & Maneviyat
+    "iç huzur", "aydınlanma", "sessiz bilgelik", "dua ve teslimiyet",
+    "spiritüel uyanış", "nefes ve an", "boşlukta var olmak",
+    "tanrı ve insan", "inanç ve şüphe",
+
+    # Viral & İlgi Çeken
+    "toxic ilişkilerden kurtulmak", "sınır koymayı öğrenmek",
+    "hayır diyebilmek", "başkalarının onayına ihtiyaç duymamak",
+    "kendi hikayenin kahramanı olmak", "geçmişi bırakmak ve ilerlemek",
+    "karşılaştırma tuzağından çıkmak", "kendi hızında ilerlемek",
+    "sessizliğin gücü", "yavaşlamanın erdemi",
+    "teknoloji ve insanlık", "yapay zeka çağında anlam",
+    "tüketim toplumunda mutluluk", "para ve mutluluk",
+    "başarı mı mutluluk mu", "özgürlük mü güvenlik mi",
 ]
 
 def generate_quote() -> dict:
