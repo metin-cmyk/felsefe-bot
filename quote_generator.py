@@ -2,7 +2,6 @@ import os, re, random, anthropic
 
 client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
 
-# 40+ Felsefi Akım, İnanç ve Gelenek
 # 50'den Fazla Felsefi Akım, İnanç ve Gelenek
 AKIMLAR = [
     "Stoacılık", "Budizm", "Taoizm", "Varoluşçuluk", "Nihilizm", "Pragmatizm", "Epikürcülük", 
@@ -29,7 +28,8 @@ FILOZOFLAR = {
     "Epikürcülük": ["Epikür", "Lucretius", "Metrodorus", "Hermarchus", "Philodemus", "Polyaenus", "Colotes", "Leontion"],
     "Tasavvuf (Sufizm)": ["Mevlana Celaleddin Rumi", "Yunus Emre", "Hacı Bektaş Veli", "Şems-i Tebrizi", "Muhyiddin İbn'ül-Arabi", "Niyazi Mısri", "Ahmet Yesevi", "Hacı Bayram Veli", "Şeyh Galip", "Hallac-ı Mansur", "Feridüddin Attar", "Rabia el-Adeviyye", "Beyazıd-ı Bistami", "Erzurumlu İbrahim Hakkı", "Akşemseddin", "Eşrefoğlu Rumi", "Aziz Mahmud Hüdayi", "Somuncu Baba", "Şah-ı Nakşibend", "Abdülkadir Geylani", "Sadreddin Konevi", "İmam Rabbani", "Molla Cami", "Hafız Şirazi", "Sadi Şirazi", "Fuzuli", "Pir Sultan Abdal", "Seyyid Nesimi", "Şabani Veli", "Merkez Efendi", "Ebul Hasan Harakani", "Şibli", "Cüneyd-i Bağdadi"],
     "İslam Felsefesi": ["Farabi", "İbn Sina", "Gazali", "İbn Rüşd", "İbn Haldun", "El-Kindi", "Sühreverdi", "İbn Bacce", "İbn Tufeyl", "Ömer Hayyam", "Molla Sadra", "Fahreddin Razi", "İbn Hazm", "Nasîrüddin Tûsî", "İhvan-ı Safa", "Biruni", "Sühreverdi el-Maktul", "İbnü'n-Nefis"],
-"Türk Düşünce Tarihi": ["Mustafa Kemal Atatürk", "Ziya Gökalp", "Nurettin Topçu", "Cemil Meriç", "Yusuf Has Hacib", "İoanna Kuçuradi", "Hilmi Ziya Ülken", "Ahmet Hamdi Tanpınar", "Oğuz Atay", "Kemal Tahir", "Yusuf Akçura", "İsmail Hakkı Baltacıoğlu", "Sabahattin Ali", "Teoman Duralı", "Macit Gökberk", "Niyazi Berkes", "Bedia Akarsu", "Yalçın Koç", "Namık Kemal", "Ali Suavi", "Prens Sabahaddin", "Erol Güngör", "Şerif Mardin", "Kemal Karpat", "İdris Küçükömer", "Sezai Karakoç", "İsmet Özel", "Attila İlhan", "Dursun Erkip"],    "Aydınlanma Felsefesi": ["Immanuel Kant", "Jean-Jacques Rousseau", "Voltaire", "John Locke", "David Hume", "Montesquieu", "Denis Diderot", "Thomas Paine", "Adam Smith", "Cesare Beccaria", "Gotthold Ephraim Lessing", "Baron d'Holbach", "Marquis de Condorcet", "Mary Wollstonecraft"],
+    "Türk Düşünce Tarihi": ["Mustafa Kemal Atatürk", "Ziya Gökalp", "Nurettin Topçu", "Cemil Meriç", "Yusuf Has Hacib", "İoanna Kuçuradi", "Hilmi Ziya Ülken", "Ahmet Hamdi Tanpınar", "Oğuz Atay", "Kemal Tahir", "Yusuf Akçura", "İsmail Hakkı Baltacıoğlu", "Sabahattin Ali", "Teoman Duralı", "Macit Gökberk", "Niyazi Berkes", "Bedia Akarsu", "Yalçın Koç", "Namık Kemal", "Ali Suavi", "Prens Sabahaddin", "Erol Güngör", "Şerif Mardin", "Kemal Karpat", "İdris Küçükömer", "Sezai Karakoç", "İsmet Özel", "Attila İlhan", "Dursun Erkip"],
+    "Aydınlanma Felsefesi": ["Immanuel Kant", "Jean-Jacques Rousseau", "Voltaire", "John Locke", "David Hume", "Montesquieu", "Denis Diderot", "Thomas Paine", "Adam Smith", "Cesare Beccaria", "Gotthold Ephraim Lessing", "Baron d'Holbach", "Marquis de Condorcet", "Mary Wollstonecraft"],
     "Rasyonalizm": ["Rene Descartes", "Baruch Spinoza", "Gottfried Wilhelm Leibniz", "Nicolas Malebranche", "Christian Wolff", "Blaise Pascal", "Antoine Arnauld"],
     "Empirizm": ["John Locke", "George Berkeley", "David Hume", "Francis Bacon", "Thomas Hobbes", "John Stuart Mill"],
     "İdealizm": ["Hegel", "Kant", "Fichte", "Schelling", "Arthur Schopenhauer", "Benedetto Croce", "Giovanni Gentile", "F.H. Bradley", "J.M.E. McTaggart", "T.H. Green"],
@@ -49,14 +49,7 @@ FILOZOFLAR = {
 
 # 300+ Devasa, Çok Spesifik ve Derin Felsefi / Psikolojik / Sosyolojik Konu Başlığı
 KONULAR = [
-    # 🇹🇷 AKIL, BİLİM VE BAĞIMSIZLIK (Atatürk ve Aydınlanma vizyonu için)
-    "Akıl ve bilimin dogmalara karşı kazandığı mutlak zafer", 
-    "Tam bağımsızlık, hürriyet ve bir ulusun kendi kaderini yazması", 
-    "Cehaletle savaşın, cephedeki savaştan çok daha çetin olması",
-    "Fikri hür, vicdanı hür nesillerin inşası",
-    "Geçmişin prangalarından kurtulup geleceğe yön vermek",
-    
-    # ⏳ ZAMAN, GEÇİCİLİK, HAFIZA VE UZAM (Çok Daha Derin)
+    # ⏳ ZAMAN, GEÇİCİLİK, HAFIZA VE UZAM
     "Zamanın acımasız geçiciliği ve anı yakalamak", "Geçmişin bir illüzyon, geleceğin ise bir kaygı olması",
     "Hatıraların insan ruhuna yüklediği ağır prangalar", "Unutmanın iyileştirici gücü ve nostaljinin zehri",
     "İnsanın zamanla yarışması ve kaçınılmaz mağlubiyeti", "Sonsuzluk arzusunun ölümlü bedendeki trajedisi",
@@ -150,30 +143,53 @@ KONULAR = [
 ]
 
 def generate_quote():
-    akim = random.choice(AKIMLAR)
-    
-    # %80 ihtimalle listeden bilindik birini seç, %20 ihtimalle Claude'dan "Kıyıda köşede kalmış" birini bulmasını iste.
-    if akim in FILOZOFLAR and FILOZOFLAR[akim] and random.random() < 0.8:
-        filozof = random.choice(FILOZOFLAR[akim])
-    else:
-        filozof = "bu felsefi akımdan, tarihi kaynaklarda adı az geçen, gölgede kalmış ama çok derin bir düşünür"
+    # Atatürk'e %20 oranında KESİN öncelik veriyoruz
+    if random.random() < 0.20:
+        akim = "Türk Düşünce Tarihi / Aydınlanma"
+        filozof = "Mustafa Kemal Atatürk"
         
-    konu = random.choice(KONULAR)
+        # Atatürk'ün felsefesine tam oturacak, onun vizyonuna özel konular
+        ataturk_konulari = [
+            "Akıl ve bilimin dogmalara karşı kazandığı mutlak zafer", 
+            "Tam bağımsızlık, hürriyet ve bir ulusun kendi kaderini yazması", 
+            "Cehaletle savaşın, silahlı savaştan çok daha çetin olması",
+            "Fikri hür, vicdanı hür, irfanı hür nesillerin inşası",
+            "Geçmişin prangalarından kurtulup geleceğe ve yeniliğe yön vermek",
+            "Milletin kayıtsız şartsız iradesinin her türlü gücün üstünde olması",
+            "Sanatsız kalan bir milletin hayat damarlarından birinin kopması",
+            "Aklın, mantığın ve bilimin rehberliğinde dogmaları yıkmak",
+            "Bireyin kul olmaktan çıkıp özgür bir vatandaşa dönüşmesi",
+            "Umutsuzluğa yer olmaması ve imkansızlıklar içinde var olmak"
+        ]
+        konu = random.choice(ataturk_konulari)
+    else:
+        # Kalan %80 ihtimalle diğer devasa kombinasyonlardan birini seç
+        akim = random.choice(AKIMLAR)
+        
+        # Diğerlerinde %80 bilindik isim, %20 Claude'un kendi seçeceği az bilinen isim
+        if akim in FILOZOFLAR and FILOZOFLAR[akim] and random.random() < 0.8:
+            filozof = random.choice(FILOZOFLAR[akim])
+        else:
+            filozof = "bu felsefi akımdan, tarihi kaynaklarda adı az geçen, gölgede kalmış ama çok derin bir düşünür"
+            
+        konu = random.choice(KONULAR)
 
     system = """Sen dünyaca ünlü, ansiklopedik bilgiye sahip bir felsefe profesörü ve bilgesin.
-Sana verilen akım, filozof ve konu bağlamında; derinlikli, ufuk açıcı, daha önce internette klişeleşmemiş ÖZGÜN bir felsefi söz üret.
+Sana verilen akım, düşünür ve konu bağlamında; derinlikli, ufuk açıcı, daha önce internette klişeleşmemiş ÖZGÜN bir felsefi/vizyoner söz üret.
 
-Eğer senden "az bilinen, gölgede kalmış bir düşünür" istenmişse, gerçekten tarihte yaşamış ama popüler olmayan bir ismi bul (örneğin: Ibn Tufeyl, Marguerite Porete, Zhuangzi'nin bir müridi, Philipp Mainländer, Suhreverdi vb.) ve sözü onun ağzından, onun gerçek ontolojik/epistemolojik felsefesine uygun yaz.
+Eğer düşünür Mustafa Kemal Atatürk ise; sözü onun akılcı, bilimsel, çağdaş, bağımsızlıkçı ve kararlı karakterine, onun muazzam devrimci felsefesine uygun, çok güçlü ve sarsıcı bir üslupla yaz.
+
+Eğer senden "az bilinen, gölgede kalmış bir düşünür" istenmişse, gerçekten tarihte yaşamış ama popüler olmayan bir ismi bul ve sözü onun ağzından, onun felsefesine sadık kalarak yaz.
 
 Söz kısa, vurucu ve Instagram/Twitter'da paylaşılmaya uygun olmalı. Kesinlikle klişe kişisel gelişim sözleri yazma; edebi, felsefi, sarsıcı ve ağırbaşlı olsun.
 
 YANITINI AŞAĞIDAKİ FORMATTA VER. BAŞKA HİÇBİR ŞEY YAZMA:
 
 SOZ:
-[Ürettiğin felsefi söz, tırnak işareti kullanma]
+[Ürettiğin söz, tırnak işareti kullanma]
 ---
 YAZAR:
-[Gerçek Filozofun/Düşünürün Adı]
+[Gerçek Düşünürün Adı]
 ---
 AKIM:
 [Felsefi Akım / Gelenek]
@@ -190,7 +206,7 @@ ACIKLAMA:
         system=system,
         messages=[{
             "role": "user",
-            "content": f"Bağlam: {akim} felsefesi.\nDüşünür: {filozof}.\nKonu: '{konu}'\nBu bağlamda eşsiz ve sarsıcı bir felsefi alıntı ve analiz üret."
+            "content": f"Bağlam: {akim}.\nDüşünür: {filozof}.\nKonu: '{konu}'\nBu bağlamda eşsiz, sarsıcı bir alıntı ve analiz üret."
         }]
     )
 
