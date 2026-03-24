@@ -17,7 +17,7 @@ AKIMLAR = [
     "Faydacılık (Utilitarianism)", "Kişiselcilik (Personalizm)", "Post-yapısalcılık", "Karanlık Aydınlanma"
 ]
 
-# 500'den Fazla Düşünür, Şair, Mistik, Psikolog ve Filozof (Dev Havuz)
+# 500'den Fazla Düşünür (Dev Havuz)
 FILOZOFLAR = {
     "Stoacılık": ["Marcus Aurelius", "Epiktetos", "Seneca", "Zeno", "Kleantes", "Chrysippos", "Musonius Rufus", "Panaitios", "Poseidonios", "Hierokles", "Antipatros", "Diogenes of Babylon", "Aristo of Chios"],
     "Budizm": ["Buda", "Thich Nhat Hanh", "Dalai Lama", "Nagarjuna", "Shunryu Suzuki", "Bodhidharma", "Dogen", "Milarepa", "Vasubandhu", "Asanga", "Chandrakirti", "Padmasambhava", "Shantideva", "Atisha", "Naropa", "Marpa", "Tsongkhapa", "Nichiren", "Kukai", "Shinran", "Huineng"],
@@ -48,7 +48,7 @@ FILOZOFLAR = {
     "Mistisizm": ["Eckhart Tolle", "Meister Eckhart", "Hildegard von Bingen", "Teresa of Avila", "John of the Cross", "Jakob Böhme", "Gurdjieff", "Emanuel Swedenborg", "William Law", "Julian of Norwich", "Marguerite Porete", "Simeon the New Theologian"]
 }
 
-# 300+ Devasa, Çok Spesifik ve Derin Felsefi / Psikolojik / Sosyolojik Konu Başlığı
+# 300+ Derin Felsefi / Psikolojik / Sosyolojik Konu Başlığı
 KONULAR = [
     # ⏳ ZAMAN, GEÇİCİLİK, HAFIZA VE UZAM
     "Zamanın acımasız geçiciliği ve anı yakalamak", "Geçmişin bir illüzyon, geleceğin ise bir kaygı olması",
@@ -72,7 +72,7 @@ KONULAR = [
     "Kaderi sevmek (Amor Fati) ve başımıza gelen her şeyi kucaklamak", "Yaşamın trajik boyutu ve bunu kabullenmenin zarafeti",
     "Sisyphos'un kayayı tepeye çıkarırkenki gizli mutluluğu", "Var olmanın dayanılmaz hafifliği ve kararsızlık",
     "Kendi kendine doğmuş olma yanılgısı ve kökeni inkar", "Sürekli bir 'olma' halinde olup asla 'tamamlanamamak'",
-    "Evrenin sağır sessizliği karşısında insanın çığlığı", "Ölümın varlığı sayesinde hayatın kıymetlenmesi paradoksu",
+    "Evrenin sağır sessizliği karşısında insanın çığlığı", "Ölümün varlığı sayesinde hayatın kıymetlenmesi paradoksu",
     
     # 🎭 İÇ DÜNYA, PSİKOLOJİ, EGO, KİMLİK VE GÖLGE BENLİK
     "Ego, kibir ve insanın kendi kendini kandırma sanatı", "Yalnızlığın yaratıcı gücü vs. yıkıcı ve çürütücü tarafı",
@@ -144,12 +144,9 @@ KONULAR = [
 ]
 
 def generate_quote():
-    # Güncel tarihi kontrol et (Ay ve Gün)
     bugun = datetime.now()
     ay = bugun.month
     gun = bugun.day
-    
-    # MİLLİ BAYRAM / ANMA GÜNÜ KONTROLÜ
     ozel_gun_mesaji = None
     
     if ay == 11 and gun == 10:
@@ -163,14 +160,11 @@ def generate_quote():
     elif ay == 4 and gun == 23:
         ozel_gun_mesaji = "BUGÜN 23 NİSAN. Söz doğrudan kayıtsız şartsız milli egemenlik, çocuklara ve geleceğe bırakılan aydınlık miras, meclisin ve demokrasinin gücü üzerine olmalı."
 
-    # Karar Mekanizması
     if ozel_gun_mesaji:
-        # EĞER BUGÜN MİLLİ BİR GÜNSE: %100 oranında sadece Atatürk paylaşımı yapılır!
-        akim = "Türk Düşünce Tarihi / Cumhuriyet ve Aydınlanma"
+        akim = "Türk Düşünce Tarihi / Cumhuriyet"
         filozof = "Mustafa Kemal Atatürk"
         konu = ozel_gun_mesaji
     elif random.random() < 0.20:
-        # NORMAL GÜNLERDE: %20 İhtimalle yine Atatürk
         akim = "Türk Düşünce Tarihi / Aydınlanma"
         filozof = "Mustafa Kemal Atatürk"
         ataturk_konulari = [
@@ -187,7 +181,6 @@ def generate_quote():
         ]
         konu = random.choice(ataturk_konulari)
     else:
-        # NORMAL GÜNLERDE: Kalan %80 ihtimalle diğer devasa kombinasyonlardan birini seç
         akim = random.choice(AKIMLAR)
         if akim in FILOZOFLAR and FILOZOFLAR[akim] and random.random() < 0.8:
             filozof = random.choice(FILOZOFLAR[akim])
@@ -195,40 +188,43 @@ def generate_quote():
             filozof = "bu felsefi akımdan, tarihi kaynaklarda adı az geçen, gölgede kalmış ama çok derin bir düşünür"
         konu = random.choice(KONULAR)
 
-    system = """Sen dünyaca ünlü, ansiklopedik bilgiye sahip bir felsefe profesörü ve bilgesin.
-Sana verilen akım, düşünür ve konu bağlamında; derinlikli, ufuk açıcı, daha önce internette klişeleşmemiş ÖZGÜN bir felsefi/vizyoner söz üret.
+    # SENİN KATIKSIZ ORİJİNAL PROMPT KURALLARIN
+    system = """Sen derin bir felsefe bilgisine sahip Türkçe içerik üreticisisin.
+Felsefi sözler üretiyorsun — kısa, güçlü, düşündürücü.
 
-Eğer düşünür Mustafa Kemal Atatürk ise; sözü onun akılcı, bilimsel, çağdaş, bağımsızlıkçı ve kararlı karakterine, onun muazzam devrimci felsefesine uygun, çok güçlü ve sarsıcı bir üslupla yaz. Sana verilen günün anlam ve önemini (örneğin 10 Kasım veya 29 Ekim ise) kesinlikle dikkate alarak o ruha uygun bir metin çıkar.
+Eğer düşünür Mustafa Kemal Atatürk ise; sözü onun akılcı, bağımsızlıkçı ve devrimci karakterine uygun yaz.
+Değilse; verilen akıma ve düşünüre sadık kalarak çok vurucu, sarsıcı, özgün bir edebi alıntı üret. Klişelerden uzak dur.
 
-Eğer senden "az bilinen, gölgede kalmış bir düşünür" istenmişse, gerçekten tarihte yaşamış ama popüler olmayan bir ismi bul ve sözü onun ağzından, onun felsefesine sadık kalarak yaz.
+ÖNEMLİ KURALLAR:
+- SOZ alanında kesinlikle tirnak isareti (" veya \u201c veya ') KULLANMA. Sözü düz yaz.
+- TWITTER alaninda da sözü tirnaksiz yaz.
+- Hashtag'leri her zaman # ile baslat, Türkçe karakter kullanma (ö->o, ü->u, ş->s, ç->c, ı->i, ğ->g).
 
-Söz kısa, vurucu ve Instagram/Twitter'da paylaşılmaya uygun olmalı. Kesinlikle klişe kişisel gelişim sözleri yazma; edebi, felsefi, sarsıcı ve ağırbaşlı olsun.
-
-YANITINI AŞAĞIDAKİ FORMATTA VER. BAŞKA HİÇBİR ŞEY YAZMA:
+Yanitini TAM OLARAK su formatta ver:
 
 SOZ:
-[Ürettiğin söz, tırnak işareti kullanma]
+[Türkçe felsefi söz — 1-2 cümle, max 200 karakter, TIRNAK KULLANMA]
 ---
 YAZAR:
-[Gerçek Düşünürün Adı]
+[Filozofun adi]
 ---
 AKIM:
 [Felsefi Akım / Gelenek]
 ---
 HASHTAG:
-[#Felsefe #Bilgelik ve konuyla ilgili 3 hashtag daha]
+[5 adet hashtag — #Felsefe ve #Bilgelik zorunlu, konuyla ilgili 3 tane daha ekle (Türkçe karakter kullanma)]
 ---
 ACIKLAMA:
-[Sözün kısa, derinlikli Türkçe açıklaması — Instagram caption için 2-3 cümlelik bir zihin açıcı yorum]"""
+[Sözün kısa, derinlikli Türkçe açıklaması — 1-2 cümle, Instagram caption için]
+---
+TWITTER:
+[Aynı felsefi söz (tırnaksız), iki satır boşluk, uzun tire (—) ve yazar adı]"""
 
     msg = client.messages.create(
         model="claude-sonnet-4-20250514",
         max_tokens=700,
         system=system,
-        messages=[{
-            "role": "user",
-            "content": f"Bağlam: {akim}.\nDüşünür: {filozof}.\nKonu: '{konu}'\nBu bağlamda eşsiz, sarsıcı bir alıntı ve analiz üret."
-        }]
+        messages=[{"role": "user", "content": f"Bağlam: {akim}.\nDüşünür: {filozof}.\nKonu: '{konu}'\nEşsiz bir alıntı ve analiz üret."}]
     )
 
     return _parse(msg.content[0].text.strip(), filozof, akim)
@@ -236,39 +232,28 @@ ACIKLAMA:
 def _clean_quotes(text):
     text = text.strip()
     for q in ['\u201c', '\u201d', '\u2018', '\u2019', '"', "'"]:
-        if text.startswith(q):
-            text = text[1:]
-        if text.endswith(q):
-            text = text[:-1]
+        if text.startswith(q): text = text[1:]
+        if text.endswith(q): text = text[:-1]
     return text.strip()
 
 def _parse(text, default_autor, default_akim):
     def get(key):
-        pattern = rf"{key}:\n(.*?)(?:\n---|\Z)"
-        m = re.search(pattern, text, re.DOTALL)
+        m = re.search(rf"{key}:\n(.*?)(?:\n---|\Z)", text, re.DOTALL)
         return m.group(1).strip() if m else ""
 
-    quote    = _clean_quotes(get("SOZ"))
-    author   = get("YAZAR")
-    
-    # Eğer yapay zeka YAZAR kısmını boş döndürürse veya bizim "az bilinen" talimatımızı basarsa, default'a dön
+    quote = _clean_quotes(get("SOZ"))
+    author = get("YAZAR")
     if not author or "az bilinen" in author.lower():
         author = default_autor if "az bilinen" not in default_autor.lower() else "Anonim Bilge"
 
-    akim     = get("AKIM") or default_akim
-    hashtags = get("HASHTAG")
-    aciklama = get("ACIKLAMA")
-
-    if not hashtags:
-        hashtags = "#Felsefe #Bilgelik #Düşünce #Hayat"
-
-    twitter = f"{quote}\n\n— {author}"
+    hashtags = get("HASHTAG") or "#Felsefe #Bilgelik"
+    twitter = get("TWITTER") or f"{quote}\n\n— {author}"
 
     return {
         "quote": quote,
         "author": author,
-        "akim": akim,
+        "akim": get("AKIM") or default_akim,
         "hashtags": hashtags,
-        "aciklama": aciklama,
+        "aciklama": get("ACIKLAMA"),
         "twitter": twitter
     }
