@@ -3,9 +3,9 @@ from pathlib import Path
 
 log = logging.getLogger(__name__)
 
-META_ACCESS_TOKEN    = os.environ["META_ACCESS_TOKEN"]       # Uzun ömürlü Page Access Token
-INSTAGRAM_ACCOUNT_ID = os.environ["INSTAGRAM_ACCOUNT_ID"]   # Instagram Business hesap ID
-FACEBOOK_PAGE_ID     = os.environ["FACEBOOK_PAGE_ID"]        # Facebook Sayfa ID
+META_ACCESS_TOKEN    = os.environ.get("META_ACCESS_TOKEN", "")
+INSTAGRAM_ACCOUNT_ID = os.environ.get("INSTAGRAM_ACCOUNT_ID", "")
+FACEBOOK_PAGE_ID     = os.environ.get("FACEBOOK_PAGE_ID", "")
 
 TWITTER_CONSUMER_KEY    = os.environ["TWITTER_CONSUMER_KEY"]
 TWITTER_CONSUMER_SECRET = os.environ["TWITTER_CONSUMER_SECRET"]
@@ -135,25 +135,26 @@ def publish_all(quote_data, post_img, story_img):
         hashtags,
     )
 
-    # Görseli public URL'e yükle (Instagram için)
-    image_url = None
-    try:
-        image_url = _upload_to_imgbb(post_img)
-    except Exception as e:
-        log.error("imgbb hatasi, Instagram atlanıyor: %s" % e, exc_info=True)
-
-    # Instagram
-    if image_url:
+    # Instagram + Facebook (Meta key'leri varsa)
+    if META_ACCESS_TOKEN and INSTAGRAM_ACCOUNT_ID and FACEBOOK_PAGE_ID:
+        image_url = None
         try:
-            _post_instagram(image_url, caption)
+            image_url = _upload_to_imgbb(post_img)
         except Exception as e:
-            log.error("Instagram hatasi: %s" % e, exc_info=True)
+            log.error("imgbb hatasi, Instagram atlanıyor: %s" % e, exc_info=True)
 
-    # Facebook
-    try:
-        _post_facebook(post_img, caption)
-    except Exception as e:
-        log.error("Facebook hatasi: %s" % e, exc_info=True)
+        if image_url:
+            try:
+                _post_instagram(image_url, caption)
+            except Exception as e:
+                log.error("Instagram hatasi: %s" % e, exc_info=True)
+
+        try:
+            _post_facebook(post_img, caption)
+        except Exception as e:
+            log.error("Facebook hatasi: %s" % e, exc_info=True)
+    else:
+        log.warning("Meta key'leri eksik, Instagram/Facebook atlaniyor.")
 
     # Twitter / X
     try:
