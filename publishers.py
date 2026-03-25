@@ -464,6 +464,54 @@ def post_to_wordpress(quote_data, post_img):
     )
     log.info("WP post HTTP %d: %s" % (r.status_code, r.text[:300]))
     r.raise_for_status()
-    url = r.json().get("link", "")
-    log.info("WordPress'e yayinlandi: %s" % url)
-    return url
+    resp     = r.json()
+    url      = resp.get("link", "")
+    post_id  = resp.get("id")
+    log.info("WordPress'e yayinlandi: %s (id=%s)" % (url, post_id))
+    return url, post_id, media_id
+
+
+# ---------------------------------------------------------------------------
+# WordPress'ten sil
+# ---------------------------------------------------------------------------
+
+def delete_from_wordpress(post_id, media_id=None):
+    """
+    WordPress'ten yazıyı ve görselini kalıcı olarak siler.
+    """
+    deleted = []
+    # 1. Yazıyı sil (force=true — çöpe atmadan direkt sil)
+    if post_id:
+        try:
+            r = requests.delete(
+                "%s/wp-json/wp/v2/posts/%s" % (WP_URL, post_id),
+                auth=(WP_USER, WP_APP_PASS),
+                params={"force": True},
+                timeout=15,
+            )
+            if r.status_code in (200, 201):
+                log.info("WP post silindi: %s" % post_id)
+                deleted.append("post:%s" % post_id)
+            else:
+                log.warning("WP post silinemedi: %s — %s" % (post_id, r.text[:100]))
+        except Exception as e:
+            log.error("WP post silme hatasi: %s" % e)
+
+    # 2. Görseli sil
+    if media_id:
+        try:
+            r = requests.delete(
+                "%s/wp-json/wp/v2/media/%s" % (WP_URL, media_id),
+                auth=(WP_USER, WP_APP_PASS),
+                params={"force": True},
+                timeout=15,
+            )
+            if r.status_code in (200, 201):
+                log.info("WP media silindi: %s" % media_id)
+                deleted.append("media:%s" % media_id)
+            else:
+                log.warning("WP media silinemedi: %s — %s" % (media_id, r.text[:100]))
+        except Exception as e:
+            log.error("WP media silme hatasi: %s" % e)
+
+    return deleted
