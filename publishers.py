@@ -32,8 +32,9 @@ def _wp_upload_image(image_path):
     return r.json()["id"]
 
 def _generate_philosopher_info(term_name):
-    """Claude'dan detayli ve gercek bilgileri zorla alir."""
+    """Claude'dan detayli biyografi alir. Donmayi onlemek icin iceride import edilir."""
     try:
+        # KRITIK: Donmayi onlemek icin import burada yapilmali
         import quote_generator
         client = quote_generator.client
         
@@ -76,7 +77,7 @@ def _ensure_term_with_cover(taxonomy_slug, term_name, subtitle_text):
         if taxonomy_slug == "filozof":
             tarih, biyo = _generate_philosopher_info(term_name)
         else:
-            biyo = f"{term_name} akimi üzerine kapsamli felsefi inceleme."
+            biyo = f"{term_name} akımı üzerine kapsamlı felsefi inceleme."
 
         payload = {
             "name": term_name,
@@ -111,10 +112,6 @@ def _upload_to_imgbb(image_path):
     return r.json()["data"]["url"] if r.status_code == 200 else None
 
 def post_to_wordpress(quote_data, post_img):
-    """
-    Bu fonksiyonu bot.py dogrudan cagiriyorsa publish_all icindekini siliyoruz.
-    Çift paylasimi önlemek icin ana fonksiyon budur.
-    """
     if not WP_APP_PASS: return None
     akim = quote_data.get("akim", "Genel Felsefe")
     yazar = quote_data.get("author", "Anonim")
@@ -150,30 +147,33 @@ def post_to_wordpress(quote_data, post_img):
 
 def publish_all(quote_data, post_img, story_img):
     """
-    DIKKAT: Çift paylasimi önlemek icin post_to_wordpress cagrisi buradadir.
-    Eger bot.py hem bunu hem post_to_wordpress'i cagiriyorsa birini silmelisin.
+    Hem WordPress hem de Sosyal Medya paylasimlarini tek noktadan yonetir.
     """
     log.info("Paylasim zinciri tetiklendi...")
     
-    # 1. WordPress Paylasimi (TEK YER)
+    # 1. WordPress Paylasimi
     wp_link = post_to_wordpress(quote_data, post_img)
+    log.info(f"WordPress Tamam: {wp_link}")
     
-    # 2. Sosyal Medya
+    # 2. Sosyal Medya Hazirlik
     caption = f"{quote_data['quote']}\n\n— {quote_data['author']} | {quote_data['akim']}\n\n{quote_data.get('hashtags', '')}"
 
+    # Instagram & Facebook
     if META_ACCESS_TOKEN and INSTAGRAM_ACCOUNT_ID:
         try:
             img_url = _upload_to_imgbb(post_img)
             if img_url:
                 # Instagram
-                r = requests.post(f"{GRAPH}/{INSTAGRAM_ACCOUNT_ID}/media", data={"image_url": img_url, "caption": caption, "access_token": META_ACCESS_TOKEN})
+                r = requests.post(f"{GRAPH}/{INSTAGRAM_ACCOUNT_ID}/media", data={"image_url": img_url, "caption": caption, "access_token": META_ACCESS_TOKEN}, timeout=30)
                 if r.status_code == 200:
-                    requests.post(f"{GRAPH}/{INSTAGRAM_ACCOUNT_ID}/media_publish", data={"creation_id": r.json()["id"], "access_token": META_ACCESS_TOKEN})
+                    requests.post(f"{GRAPH}/{INSTAGRAM_ACCOUNT_ID}/media_publish", data={"creation_id": r.json()["id"], "access_token": META_ACCESS_TOKEN}, timeout=30)
                 # Facebook
                 with open(post_img, "rb") as f:
-                    requests.post(f"{GRAPH}/{FACEBOOK_PAGE_ID}/photos", data={"caption": caption, "access_token": META_ACCESS_TOKEN}, files={"source": f})
+                    requests.post(f"{GRAPH}/{FACEBOOK_PAGE_ID}/photos", data={"caption": caption, "access_token": META_ACCESS_TOKEN}, files={"source": f}, timeout=60)
+                log.info("Meta paylasimlari tamamlandi.")
         except Exception as e: log.error(f"Meta Hatasi: {e}")
 
+    # Twitter
     if TWITTER_ACCESS_TOKEN:
         try:
             import tweepy
@@ -182,6 +182,7 @@ def publish_all(quote_data, post_img, story_img):
             client_v2 = tweepy.Client(consumer_key=TWITTER_CONSUMER_KEY, consumer_secret=TWITTER_CONSUMER_SECRET, access_token=TWITTER_ACCESS_TOKEN, access_token_secret=TWITTER_ACCESS_SECRET)
             media = api.media_upload(post_img)
             client_v2.create_tweet(text=caption[:280], media_ids=[media.media_id])
+            log.info("Twitter paylasimi tamamlandi.")
         except Exception as e: log.error(f"Twitter Hatasi: {e}")
 
     return wp_link
