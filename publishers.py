@@ -3,20 +3,10 @@ from pathlib import Path
 
 log = logging.getLogger(__name__)
 
-# --- Ayarlar ---
+# --- WordPress Ayarları ---
 WP_URL      = os.environ.get("WP_URL", "https://felsefemiz.net")
 WP_USER     = os.environ.get("WP_USER", "serezart")
 WP_APP_PASS = os.environ.get("WP_APP_PASS", "")
-
-META_ACCESS_TOKEN    = os.environ.get("META_ACCESS_TOKEN", "")
-INSTAGRAM_ACCOUNT_ID = os.environ.get("INSTAGRAM_ACCOUNT_ID", "")
-FACEBOOK_PAGE_ID     = os.environ.get("FACEBOOK_PAGE_ID", "")
-TWITTER_CONSUMER_KEY    = os.environ.get("TWITTER_CONSUMER_KEY", "")
-TWITTER_CONSUMER_SECRET = os.environ.get("TWITTER_CONSUMER_SECRET", "")
-TWITTER_ACCESS_TOKEN    = os.environ.get("TWITTER_ACCESS_TOKEN", "")
-TWITTER_ACCESS_SECRET   = os.environ.get("TWITTER_ACCESS_SECRET", "")
-IMGBB_API_KEY = os.environ.get("IMGBB_API_KEY", "")
-GRAPH = "https://graph.facebook.com/v19.0"
 
 def _wp_upload_image(image_path):
     if not WP_APP_PASS: raise RuntimeError("WP_APP_PASS eksik!")
@@ -32,16 +22,15 @@ def _wp_upload_image(image_path):
     return r.json()["id"]
 
 def _generate_philosopher_info(term_name):
-    """Claude'dan detayli biyografi alir. Donmayi onlemek icin iceride import edilir."""
+    """Claude'dan detaylı biyografi alır. Donmayı önlemek için içeride import edilir."""
     try:
-        # KRITIK: Donmayi onlemek icin import burada yapilmali
+        # Circular import (donma) hatasını önlemek için fonksiyon içinde import
         import quote_generator
         client = quote_generator.client
         
-        prompt = (f"{term_name} kimdir? Bu düsünürün felsefesini, hayatini ve en önemli eserlerini "
-                  f"anlatan akademik ve derinlikli bir yazi yaz. 3-4 paragraf olsun. "
-                  f"Uydurma bilgi verme, ansiklopedik dogruluga sadik kal. "
-                  f"Format kesinlikle su olsun:\nTARIH: [Dogum ve Ölüm Yili]\nBIYO: [Detayli Biyografi Metni]")
+        prompt = (f"{term_name} kimdir? Bu düşünürün felsefesini, hayatını ve en önemli eserlerini "
+                  f"anlatan profesyonel, ansiklopedik bir yazı yaz. En az 3 paragraf olsun. "
+                  f"Format kesinlikle şu olsun:\nTARIH: [Doğum ve Ölüm Yılı]\nBIYO: [Detaylı Biyografi Metni]")
         
         msg = client.messages.create(
             model="claude-3-5-sonnet-20240620",
@@ -56,10 +45,11 @@ def _generate_philosopher_info(term_name):
         
         return tarih, biyo
     except Exception as e:
-        log.error(f"AI Bilgi hatasi: {e}")
+        log.error(f"AI Bilgi üretme hatası: {e}")
         return "Bilinmiyor", f"{term_name} üzerine felsefi bir inceleme."
 
 def _ensure_term_with_cover(taxonomy_slug, term_name, subtitle_text):
+    """Terim (Filozof/Akım) yoksa görsel ve AI bilgisiyle oluşturur."""
     if not WP_APP_PASS or not term_name: return None
     search_url = f"{WP_URL}/wp-json/wp/v2/{taxonomy_slug}?search={term_name}"
     try:
@@ -68,7 +58,7 @@ def _ensure_term_with_cover(taxonomy_slug, term_name, subtitle_text):
             for term in r.json():
                 if term["name"].lower() == term_name.lower(): return term["id"]
 
-        log.info(f"Yeni {taxonomy_slug} saptandi: {term_name}. Hazirliklar basliyor...")
+        log.info(f"Yeni {taxonomy_slug} saptandı: {term_name}. İçerik hazırlanıyor...")
         from image_generator import create_square_cover
         cover_path = create_square_cover(term_name, subtitle=subtitle_text)
         media_id = _wp_upload_image(cover_path)
@@ -90,7 +80,7 @@ def _ensure_term_with_cover(taxonomy_slug, term_name, subtitle_text):
         }
         r_create = requests.post(f"{WP_URL}/wp-json/wp/v2/{taxonomy_slug}", auth=(WP_USER, WP_APP_PASS), json=payload, timeout=30)
         if r_create.status_code == 201: return r_create.json()["id"]
-    except Exception as e: log.error(f"Taksonomi hatasi: {e}")
+    except Exception as e: log.error(f"Taksonomi hatası: {e}")
     return None
 
 def _get_or_create_wp_tag(tag_name):
@@ -105,30 +95,31 @@ def _get_or_create_wp_tag(tag_name):
     except Exception: pass
     return None
 
-def _upload_to_imgbb(image_path):
-    if not IMGBB_API_KEY: return None
-    with open(image_path, "rb") as f: data = base64.b64encode(f.read()).decode("utf-8")
-    r = requests.post("https://api.imgbb.com/1/upload", data={"key": IMGBB_API_KEY, "image": data}, timeout=30)
-    return r.json()["data"]["url"] if r.status_code == 200 else None
-
 def post_to_wordpress(quote_data, post_img):
+    """Ana paylaşım fonksiyonu. Sadece WordPress'e gönderir."""
     if not WP_APP_PASS: return None
-    akim = quote_data.get("akim", "Genel Felsefe")
+    akim = quote_data.get("akim", "Genel felsefe")
     yazar = quote_data.get("author", "Anonim")
     title = f"{yazar} - {akim} Sözleri"
 
-    cat_id = _ensure_term_with_cover("categories", akim, "Felsefi Akimlar")
-    filozof_id = _ensure_term_with_cover("filozof", yazar, "Tarihe Yön Veren Düsünürler")
+    # Terimleri kontrol et veya oluştur
+    cat_id = _ensure_term_with_cover("categories", akim, "Felsefi Akımlar")
+    filozof_id = _ensure_term_with_cover("filozof", yazar, "Tarihe Yön Veren Düşünürler")
 
+    # Etiketleri oluştur
     raw_hashtags = quote_data.get("hashtags", "").split()
     tag_ids = [t for t in [_get_or_create_wp_tag(rt.replace("#", "").strip()) for rt in raw_hashtags] if t]
     
+    # Görseli yükle
     media_id = None
     try: media_id = _wp_upload_image(post_img)
-    except Exception: pass
+    except Exception as e: log.error(f"Post görseli yüklenemedi: {e}")
 
+    # Yazıyı oluştur
     post_data = {
-        "title": title, "content": "", "status": "publish",
+        "title": title,
+        "content": "",
+        "status": "publish",
         "categories": [cat_id] if cat_id else [],
         "filozof": [filozof_id] if filozof_id else [],
         "tags": tag_ids,
@@ -143,46 +134,7 @@ def post_to_wordpress(quote_data, post_img):
     if media_id: post_data["featured_media"] = media_id
 
     r = requests.post(f"{WP_URL}/wp-json/wp/v2/posts", auth=(WP_USER, WP_APP_PASS), json=post_data, timeout=30)
-    return r.json().get("link", "")
-
-def publish_all(quote_data, post_img, story_img):
-    """
-    Hem WordPress hem de Sosyal Medya paylasimlarini tek noktadan yonetir.
-    """
-    log.info("Paylasim zinciri tetiklendi...")
     
-    # 1. WordPress Paylasimi
-    wp_link = post_to_wordpress(quote_data, post_img)
-    log.info(f"WordPress Tamam: {wp_link}")
-    
-    # 2. Sosyal Medya Hazirlik
-    caption = f"{quote_data['quote']}\n\n— {quote_data['author']} | {quote_data['akim']}\n\n{quote_data.get('hashtags', '')}"
-
-    # Instagram & Facebook
-    if META_ACCESS_TOKEN and INSTAGRAM_ACCOUNT_ID:
-        try:
-            img_url = _upload_to_imgbb(post_img)
-            if img_url:
-                # Instagram
-                r = requests.post(f"{GRAPH}/{INSTAGRAM_ACCOUNT_ID}/media", data={"image_url": img_url, "caption": caption, "access_token": META_ACCESS_TOKEN}, timeout=30)
-                if r.status_code == 200:
-                    requests.post(f"{GRAPH}/{INSTAGRAM_ACCOUNT_ID}/media_publish", data={"creation_id": r.json()["id"], "access_token": META_ACCESS_TOKEN}, timeout=30)
-                # Facebook
-                with open(post_img, "rb") as f:
-                    requests.post(f"{GRAPH}/{FACEBOOK_PAGE_ID}/photos", data={"caption": caption, "access_token": META_ACCESS_TOKEN}, files={"source": f}, timeout=60)
-                log.info("Meta paylasimlari tamamlandi.")
-        except Exception as e: log.error(f"Meta Hatasi: {e}")
-
-    # Twitter
-    if TWITTER_ACCESS_TOKEN:
-        try:
-            import tweepy
-            auth = tweepy.OAuth1UserHandler(TWITTER_CONSUMER_KEY, TWITTER_CONSUMER_SECRET, TWITTER_ACCESS_TOKEN, TWITTER_ACCESS_SECRET)
-            api = tweepy.API(auth)
-            client_v2 = tweepy.Client(consumer_key=TWITTER_CONSUMER_KEY, consumer_secret=TWITTER_CONSUMER_SECRET, access_token=TWITTER_ACCESS_TOKEN, access_token_secret=TWITTER_ACCESS_SECRET)
-            media = api.media_upload(post_img)
-            client_v2.create_tweet(text=caption[:280], media_ids=[media.media_id])
-            log.info("Twitter paylasimi tamamlandi.")
-        except Exception as e: log.error(f"Twitter Hatasi: {e}")
-
-    return wp_link
+    link = r.json().get("link", "")
+    log.info(f"Site paylaşıldı: {link}")
+    return link
