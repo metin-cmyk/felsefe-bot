@@ -204,7 +204,13 @@ def _ensure_filozof(name, wiki_raw, wiki_lang, cover_img_path=None):
     media_id = None
     if cover_img_path:
         try:
-            media_id = _wp_upload_image(cover_img_path)
+            media_id = _wp_upload_image(
+                cover_img_path,
+                alt_text  = "%s — Felsefemiz.net" % name,
+                title     = "%s | Felsefemiz.net" % name,
+                caption   = "%s — Felsefi düşünür profili | felsefemiz.net" % name,
+                description = "%s hakkında felsefi inceleme ve biyografi. felsefemiz.net" % name,
+            )
             log.info("Filozof kapak gorseli yuklendi: %s" % media_id)
         except Exception as e:
             log.error("Filozof kapak gorseli yuklenemedi: %s" % e)
@@ -287,10 +293,13 @@ def _get_or_create_tag(name):
             for term in r.json():
                 if term["name"].lower() == name.lower():
                     return term["id"]
+        # Etiket yoksa açıklama ile oluştur
+        desc = "%s ile ilgili felsefi söz ve düşünceler — felsefemiz.net" % name
         r2 = requests.post(
             "%s/wp-json/wp/v2/tags" % WP_URL,
             auth=(WP_USER, WP_APP_PASS),
-            json={"name": name}, timeout=15,
+            json={"name": name, "description": desc},
+            timeout=15,
         )
         if r2.status_code in (200, 201):
             return r2.json()["id"]
@@ -320,7 +329,9 @@ def _prepare_tags(quote_data):
 def _build_title(quote_data):
     soz   = quote_data.get("quote", "")
     yazar = quote_data.get("author", "Anonim")
-    max_len = 55
+    akim  = quote_data.get("akim", "")
+    # SEO: "Söz — Yazar | Felsefemiz" — max 60 karakter soz
+    max_len = 50
     if len(soz) > max_len:
         t = soz[:max_len]
         ls = t.rfind(" ")
@@ -409,10 +420,17 @@ def post_to_wordpress(quote_data, post_img):
     # 6. Özet
     excerpt = aciklama if aciklama else soz[:160]
 
-    # 7. Görseli yükle (post için)
+    # 7. Görseli yükle (post için) — meta tagları ile
     media_id = None
     try:
-        media_id = _wp_upload_image(post_img)
+        soz_kisalt = soz[:80] + ("..." if len(soz) > 80 else "")
+        media_id = _wp_upload_image(
+            post_img,
+            alt_text    = "%s — %s | Felsefemiz.net" % (soz_kisalt, yazar),
+            title       = "%s sözü — %s | Felsefemiz.net" % (yazar, akim),
+            caption     = "%s — %s | felsefemiz.net" % (soz_kisalt, yazar),
+            description = "%s akımından %s'ye ait felsefi söz görseli. felsefemiz.net" % (akim, yazar),
+        )
         log.info("Post gorseli yuklendi, media_id: %s" % media_id)
     except Exception as e:
         log.error("Post gorseli yuklenemedi: %s" % e)
