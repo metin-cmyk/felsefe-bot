@@ -109,16 +109,12 @@ def _make_image(size, quote_data, palette):
     akim   = quote_data.get("akim", "")
 
     quoted_text = "\u201c%s\u201d" % quote
-
-    # Geniş kenar boşluğu
     margin    = 110
     usable_w  = w - (margin * 2)
 
-    # Font ve satır yüksekliği (-4 Punto Küçültüldü: 82 -> 78)
     f_q = _font(78, "bold")
     lh  = 105
 
-    # Satırları sar — piksel bazlı
     words   = quoted_text.split()
     lines   = []
     current = ""
@@ -133,7 +129,6 @@ def _make_image(size, quote_data, palette):
     if current:
         lines.append(current)
 
-    # Çok uzunsa küçük font (-4 Punto Küçültüldü: 68 -> 64)
     if len(lines) > 6:
         f_q = _font(64, "bold")
         lh  = 88
@@ -160,24 +155,20 @@ def _make_image(size, quote_data, palette):
         draw.text((x, y), line, font=f_q, fill=text_color)
         y += lh
 
-    # Ayraç
     line_y = y + 45
     draw.rectangle([(w//2)-70, line_y, (w//2)+70, line_y+2], fill=accent)
 
-    # Yazar (-4 Punto Küçültüldü: 56 -> 52)
     f_author    = _font(52, "italic")
     author_text = "— %s" % author
     bbox        = draw.textbbox((0,0), author_text, font=f_author)
     aw          = bbox[2] - bbox[0]
     draw.text(((w-aw)//2, line_y+22), author_text, font=f_author, fill=accent)
 
-    # Akım (-4 Punto Küçültüldü: 40 -> 36)
     f_akim = _font(36, "regular")
     bbox   = draw.textbbox((0,0), akim, font=f_akim)
     aw2    = bbox[2] - bbox[0]
     draw.text(((w-aw2)//2, line_y+96), akim, font=f_akim, fill=sub_color)
 
-    # felsefemiz.net (-4 Punto Küçültüldü: 46 -> 42)
     handle_y = int(h * 0.87)
     f_handle = _font(42, "bold")
     bbox     = draw.textbbox((0,0), SITE_HANDLE, font=f_handle)
@@ -204,48 +195,46 @@ def create_story_image(quote_data, palette):
     img.save(str(path), "JPEG", quality=95)
     return path
 
-def create_square_cover(title, subtitle="Felsefe Ansiklopedisi"):
-    """Kategoriler ve Filozoflar icin 1080x1080 ACF Kapak Gorseli uretir."""
+def create_square_cover(title, subtitle=""):
+    """
+    Filozof Kapak Gorseli: Ismi dikey yazar (alt alta), 
+    filigrani (site adini) ve cerceveyi kaldirir.
+    """
     palette = random.choice(PALETTES)
     w, h = 1080, 1080
-
     bg_color   = _hex(palette["bg"])
     text_color = _hex(palette["text"])
-    accent     = _hex(palette["accent"])
-    sub_color  = _hex(palette["sub"])
 
     img = Image.new("RGB", (w, h), bg_color)
     draw = ImageDraw.Draw(img)
 
-    # Kenarlik (Cerceve)
-    margin = 60
-    draw.rectangle([margin, margin, w-margin, h-margin], outline=accent, width=6)
+    # Ismi kelime kelime bol
+    words = title.strip().split()
+    if not words: words = ["Anonim"]
+    
+    # Dinamik font boyutu (Kelime sayisina gore)
+    count = len(words)
+    if count <= 2: f_size = 180
+    elif count == 3: f_size = 150
+    else: f_size = 120
+    
+    f_title = _font(f_size, "bold")
+    
+    # Dikey ortalama hesabi
+    line_h = f_size * 1.2
+    total_text_h = count * line_h
+    y = (h - total_text_h) // 2
 
-    # Baslik (Kategori veya Filozof Adi)
-    f_title = _font(90, "bold")
-    wrapped_title = textwrap.fill(title, width=15)
+    for word in words:
+        bbox = draw.textbbox((0, 0), word, font=f_title)
+        tw = bbox[2] - bbox[0]
+        draw.text(((w - tw)//2, y), word, font=f_title, fill=text_color)
+        y += line_h
 
-    bbox = draw.multiline_textbbox((0, 0), wrapped_title, font=f_title, align="center")
-    tw = bbox[2] - bbox[0]
-    th = bbox[3] - bbox[1]
-    title_y = (h - th) // 2 - 50
-    draw.multiline_text(((w - tw)//2, title_y), wrapped_title, font=f_title, fill=text_color, align="center")
-
-    # Alt Baslik
-    f_sub = _font(40, "italic")
-    bbox_sub = draw.textbbox((0, 0), subtitle, font=f_sub)
-    sw = bbox_sub[2] - bbox_sub[0]
-    draw.text(((w - sw)//2, title_y + th + 60), subtitle, font=f_sub, fill=sub_color)
-
-    # Site adi
-    f_handle = _font(42, "bold")
-    bbox_h = draw.textbbox((0, 0), SITE_HANDLE, font=f_handle)
-    hw = bbox_h[2] - bbox_h[0]
-    draw.text(((w - hw)//2, h - margin - 50), SITE_HANDLE, font=f_handle, fill=accent)
+    # --- SITE_HANDLE (felsefemiz.net) VE CERCEVE KALDIRILDI ---
 
     safe_name = re.sub(r"[^a-z0-9]", "_", title.lower())
     filename = "cover_%s_%d.jpg" % (safe_name[:20], int(time.time()))
     filepath = OUTPUT_DIR / filename
     img.save(str(filepath), "JPEG", quality=95)
-    
     return str(filepath)
