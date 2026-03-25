@@ -108,70 +108,48 @@ def _claude(prompt, max_tokens=800):
 
 
 def _extract_dates(text):
-    """Wikipedia metninden tarih aralığı çıkarır."""
+    """Wikipedia metninden tarih aralığı çıkarır. MÖ/MS ve yaklaşık tarihler dahil."""
     if not text:
         return "Bilinmiyor"
-    for pat in [
-        r"\((\d{4}\s*[–\-]\s*\d{4})\)",
-        r"\(([^)]*\d{1,2}\s+\w+\s+\d{3,4}[^)]*[–\-][^)]*\d{3,4}[^)]*)\)",
-        r"\(([^)]*MÖ[^)]*\d+[^)]*)\)",
-    ]:
-        m = re.search(pat, text[:600])
-        if m and len(m.group(1)) < 80:
-            return m.group(1).strip()
+
+    patterns = [
+        # MÖ formatı Türkçe
+        (r"MÖ\s*(\d{3,4})\s*[-\u2013]\s*MÖ?\s*(\d{3,4})", "Tahmini: MÖ {0} \u2013 MÖ {1}"),
+        # BC formatı İngilizce: c. 535 – c. 475 BC
+        (r"c\.?\s*(\d{3,4})\s*[-\u2013]\s*c\.?\s*(\d{3,4})\s*BC", "Tahmini: MÖ {0} \u2013 MÖ {1}"),
+        (r"(\d{3,4})\s*[-\u2013]\s*(\d{3,4})\s*BC", "Tahmini: MÖ {0} \u2013 MÖ {1}"),
+        # Parantez içi yıl: (1844-1900)
+        (r"\((\d{3,4})\s*[-\u2013]\s*(\d{3,4})\)", "{0} \u2013 {1}"),
+        # "535-475 yılları"
+        (r"(\d{3,4})\s*[-\u2013]\s*(\d{3,4})\s*yıl", "{0} \u2013 {1}"),
+        # "Milattan önce 535-475" veya "milattan evvel"
+        (r"[Mm]ilattan\s+(?:önce|evvel|once|evvel)[^\d]*(\d{3,4})[-\u2013](\d{3,4})", "Tahmini: MÖ {0} \u2013 MÖ {1}"),
+        # "tahmin" + sayı
+        (r"[Tt]ahmin[^\d]*(\d{3,4})[-\u2013](\d{3,4})", "Tahmini: MÖ {0} \u2013 MÖ {1}"),
+        # Genel parantez: (c. 535 – c. 475)
+        (r"\([^)]*?c\.?\s*(\d{3,4})[^)]*?[-\u2013][^)]*?c\.?\s*(\d{3,4})[^)]*?\)", "Tahmini: MÖ {0} \u2013 MÖ {1}"),
+    ]
+
+    for pat, fmt in patterns:
+        try:
+            m = re.search(pat, text[:800], re.IGNORECASE)
+            if m:
+                result = fmt.format(m.group(1), m.group(2))
+                if len(result) < 60:
+                    return result
+        except Exception:
+            continue
+
+    # Son çare: herhangi bir sayı aralığı
+    m = re.search(r"(\d{3,4})\s*[-\u2013]\s*(\d{3,4})", text[:500])
+    if m:
+        a, b = int(m.group(1)), int(m.group(2))
+        if 100 < a < 2100 and 100 < b < 2100 and abs(a - b) < 200:
+            if a < 800:
+                return "Tahmini: MÖ %d \u2013 MÖ %d" % (a, b)
+            return "%d \u2013 %d" % (a, b)
+
     return "Bilinmiyor"
-
-
-# ---------------------------------------------------------------------------
-# Yardımcı: Kapak görseli üret (filozoflar için 1080x1080)
-# ---------------------------------------------------------------------------
-
-def _make_cover_image(name):
-    """Filozof adını satır satır yazan 1080x1080 kapak görseli oluşturur."""
-    try:
-        from image_generator import create_square_cover
-        return create_square_cover(name)
-    except Exception as e:
-        log.error("Kapak gorseli olusturulamadi: %s" % e)
-        return None
-
-
-# ---------------------------------------------------------------------------
-# Filozof taxonomy
-# ---------------------------------------------------------------------------
-
-def _ensure_filozof(name, wiki_raw, wiki_lang):
-    """
-    'filozof' taxonomy term'ini bul veya oluştur.
-    Oluştururken: biyografi (Claude), tarihler (Wikipedia), kapak görseli.
-    Döner: term_id veya None
-    """
-    # Mevcut mi kontrol et
-    try:
-        r = requests.get(
-            "%s/wp-json/wp/v2/filozof" % WP_URL,
-            auth=(WP_USER, WP_APP_PASS),
-            params={"search": name, "per_page": 10},
-            timeout=15,
-        )
-        if r.status_code == 200:
-            for term in r.json():
-                if term["name"].lower() == name.lower():
-                    acf        = term.get("acf", {})
-                    bio_ok     = bool(acf.get("kisa_biyografi", "").strip())
-                    cover_ok   = bool(acf.get("filozof_kapak_resmi", ""))
-                    if bio_ok and cover_ok:
-                        log.info("Filozof taxonomy tamam: %s (id=%s)" % (name, term["id"]))
-                        return term["id"]
-                    else:
-                        log.info("Filozof mevcut ama eksik, yeniden olusturuluyor: %s" % name)
-                        # Term'i güncelle
-                        return _update_filozof(term["id"], name, wiki_raw, wiki_lang)
-    except Exception as e:
-        log.warning("Filozof arama hatasi: %s" % e)
-
-    return _create_filozof(name, wiki_raw, wiki_lang)
-
 
 def _build_bio(name, wiki_raw, wiki_lang):
     """Wikipedia'yı referans alarak Claude ile özgün biyografi yazar."""
