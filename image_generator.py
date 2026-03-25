@@ -124,7 +124,7 @@ def _make_image(size, quote_data, palette):
     usable_w  = w - (margin * 2)
 
     # --- Yazı Boyutu ve Sarma ---
-    f_q = _font(78, "bold")
+    f_q = _font(74, "bold")
     lh  = 105
 
     words   = quoted_text.split()
@@ -141,7 +141,7 @@ def _make_image(size, quote_data, palette):
     if current: lines.append(current)
 
     if len(lines) > 6:
-        f_q = _font(64, "bold")
+        f_q = _font(60, "bold")
         lh  = 88
         lines = []
         current = ""
@@ -170,21 +170,21 @@ def _make_image(size, quote_data, palette):
     draw.rectangle([(w//2)-70, line_y, (w//2)+70, line_y+2], fill=accent)
 
     # Yazar
-    f_author    = _font(52, "italic")
+    f_author    = _font(48, "italic")
     author_text = "— %s" % author
     bbox        = draw.textbbox((0,0), author_text, font=f_author)
     aw          = bbox[2] - bbox[0]
     draw.text(((w-aw)//2, line_y+22), author_text, font=f_author, fill=accent)
 
     # Akım
-    f_akim = _font(36, "regular")
+    f_akim = _font(32, "regular")
     bbox   = draw.textbbox((0,0), akim, font=f_akim)
     aw2    = bbox[2] - bbox[0]
     draw.text(((w-aw2)//2, line_y+96), akim, font=f_akim, fill=sub_color)
 
     # Filigran (Sadece Söz Paylaşımlarında Kalır)
     handle_y = int(h * 0.87)
-    f_handle = _font(42, "bold")
+    f_handle = _font(38, "bold")
     bbox     = draw.textbbox((0,0), SITE_HANDLE, font=f_handle)
     hw       = bbox[2] - bbox[0]
     draw.text(((w-hw)//2, handle_y), SITE_HANDLE, font=f_handle, fill=sub_color)

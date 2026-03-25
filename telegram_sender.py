@@ -26,7 +26,8 @@ def send_notification(post_img, story_img, quote_data):
         )
 
     twitter_text = quote_data.get("twitter") or quote_data["quote"]
-    preview = twitter_text[:280]
+    hashtags = quote_data.get("hashtags", "")
+    preview = twitter_text[:280] + ("\n\n" + hashtags if hashtags else "")
 
     keyboard = {
         "inline_keyboard": [
