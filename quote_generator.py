@@ -837,10 +837,19 @@ ACIKLAMA:
 TWITTER:
 [Söz tırnaksız — Yazar Adı]"""
 
-    msg = client.messages.create(
-        model="claude-sonnet-4-20250514",
-        max_tokens=700,
-        system=system,
-        messages=[{"role": "user", "content": "Dusunur: %s\nAkim: %s\nKonu: %s\n\nGERCEK sozler listesi (bu listeden sec):\n%s" % (philosopher, akim, konu, quotes_text)}]
-    )
-    return msg.content[0].text.strip()
+    import time
+    for attempt in range(3):
+        try:
+            msg = client.messages.create(
+                model="claude-sonnet-4-20250514",
+                max_tokens=700,
+                system=system,
+                messages=[{"role": "user", "content": "Dusunur: %s\nAkim: %s\nKonu: %s\n\nGERCEK sozler listesi (bu listeden sec):\n%s" % (philosopher, akim, konu, quotes_text)}]
+            )
+            return msg.content[0].text.strip()
+        except Exception as e:
+            log.warning("Claude API hatasi (deneme %d/3): %s" % (attempt+1, e))
+            if attempt < 2:
+                time.sleep(15)  # API asiri yuklenmesine karsi bekleme
+            else:
+                return ""
