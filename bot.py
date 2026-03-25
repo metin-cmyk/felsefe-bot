@@ -1,30 +1,12 @@
 import os, json, logging, schedule, time, threading, queue
 from pathlib import Path
 from datetime import datetime
+from flask import Flask
 
 from quote_generator import generate_quote
 from image_generator import create_post_image, create_story_image
 from publishers import post_to_wordpress, delete_from_wordpress
 from telegram_sender import send_notification, start_listener, _send_msg
-from flask import Flask
-
-# --- KEEP ALIVE (PING) SUNUCUSU ---
-app = Flask(__name__)
-
-@app.route('/')
-def home():
-    return "Felsefemiz Bot 7/24 Ayakta ve Çalışıyor!"
-
-def run_server():
-    # Railway'in atadığı portu otomatik alır, bulamazsa 8080 kullanır
-    port = int(os.environ.get("PORT", 8080))
-    app.run(host='0.0.0.0', port=port)
-
-def keep_alive():
-    server_thread = threading.Thread(target=run_server, daemon=True)
-    server_thread.start()
-    log.info("Ping sunucusu baslatildi.")
-# ----------------------------------
 
 logging.basicConfig(
     level=logging.INFO,
@@ -34,6 +16,28 @@ logging.basicConfig(
 log = logging.getLogger(__name__)
 
 POSTED_FILE = Path("posted.json")
+
+# ---------------------------------------------------------------------------
+# KEEP ALIVE (PING) SUNUCUSU
+# ---------------------------------------------------------------------------
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return "Felsefemiz Bot 7/24 Ayakta ve Calisiyor!"
+
+def run_server():
+    # Railway'in atadığı portu otomatik alır, bulamazsa 8080 kullanır
+    port = int(os.environ.get("PORT", 8080))
+    # log çıkışını kapatmak için werkzeug log seviyesini error yapıyoruz
+    log = logging.getLogger('werkzeug')
+    log.setLevel(logging.ERROR)
+    app.run(host='0.0.0.0', port=port)
+
+def keep_alive():
+    server_thread = threading.Thread(target=run_server, daemon=True)
+    server_thread.start()
+    log.info("Ping sunucusu baslatildi.")
 
 # ---------------------------------------------------------------------------
 # Sıralı yayın kuyruğu — tüm içerikler buradan geçer, sırayla işlenir
@@ -177,14 +181,10 @@ def run():
 # Main
 # ---------------------------------------------------------------------------
 
-# ---------------------------------------------------------------------------
-# Main
-# ---------------------------------------------------------------------------
-
 def main():
     log.info("Felsefemiz Bot basliyor...")
     
-    # 1. Ping sunucusunu başlat (BURAYI EKLEDİK)
+    # 1. Ping sunucusunu başlat
     keep_alive()
     
     start_queue_worker()
