@@ -537,52 +537,20 @@ def generate_quote():
         if akim in FILOZOFLAR and FILOZOFLAR[akim] and random.random() < 0.8:
             filozof = random.choice(FILOZOFLAR[akim])
         else:
-            filozof = "bu felsefi akımdan, tarihi kaynaklarda adı az geçen, gölgede kalmış ama çok derin bir düşünür"
+            filozof = random.choice(FILOZOFLAR.get("Antik Yunan Felsefesi", ["Sokrates"]))
         konu = random.choice(KONULAR)
 
-    # SENİN KATIKSIZ ORİJİNAL PROMPT KURALLARIN
-    system = """Sen derin bir felsefe bilgisine sahip Türkçe içerik üreticisisin.
-Felsefi sözler üretiyorsun — kısa, güçlü, düşündürücü.
+    # Wikiquote'tan gercek sozleri cek — Claude soz UYDURMUYOR
+    real_quotes, lang = _fetch_real_quotes_from_wikipedia(filozof)
 
-Eğer düşünür Mustafa Kemal Atatürk ise:
-- KESİNLİKLE kendi yazmadığı, söylemediği, kaynaklarda geçmeyen hiçbir söz üretme.
-- Sadece Nutuk, TBMM tutanakları veya resmi tarihi kaynaklarda belgelenmiş, doğrulanmış sözlerini kullan.
-- Uydurmak veya yorumlamak YASAKTIR. Doğrulanmış söz yoksa YAZAR alanına başka bir Türk düşünür yaz.
-Değilse; verilen akıma ve düşünüre sadık kalarak çok vurucu, sarsıcı, özgün bir edebi alıntı üret. Klişelerden uzak dur.
+    if real_quotes:
+        # Gercek sozler bulundu — Claude sadece secer ve formatlar
+        raw = _select_best_quote(filozof, akim, konu, real_quotes)
+    else:
+        # Gercek soz bulunamadi — ilhamla uret, ~ ile isaretli
+        raw = _fallback_inspired(filozof, akim, konu)
 
-ÖNEMLİ KURALLAR:
-- SOZ alanında kesinlikle tirnak isareti (" veya \u201c veya ') KULLANMA. Sözü düz yaz.
-- TWITTER alaninda da sözü tirnaksiz yaz.
-- Hashtag'leri her zaman # ile baslat, Türkçe karakter kullanma (ö->o, ü->u, ş->s, ç->c, ı->i, ğ->g).
-
-Yanitini TAM OLARAK su formatta ver:
-
-SOZ:
-[Türkçe felsefi söz — 1-2 cümle, max 200 karakter, TIRNAK KULLANMA]
----
-YAZAR:
-[Filozofun adi]
----
-AKIM:
-[Felsefi Akım / Gelenek]
----
-HASHTAG:
-[5 adet hashtag — #Felsefe ve #Bilgelik zorunlu, konuyla ilgili 3 tane daha ekle (Türkçe karakter kullanma)]
----
-ACIKLAMA:
-[Sözün kısa, derinlikli Türkçe açıklaması — 1-2 cümle, Instagram caption için]
----
-TWITTER:
-[Aynı felsefi söz (tırnaksız), iki satır boşluk, uzun tire (—) ve yazar adı]"""
-
-    msg = client.messages.create(
-        model="claude-sonnet-4-20250514",
-        max_tokens=700,
-        system=system,
-        messages=[{"role": "user", "content": f"Bağlam: {akim}.\nDüşünür: {filozof}.\nKonu: '{konu}'\nEşsiz bir alıntı ve analiz üret."}]
-    )
-
-    return _parse(msg.content[0].text.strip(), filozof, akim)
+    return _parse(raw, filozof, akim)
 
 def _clean_quotes(text):
     text = text.strip()
