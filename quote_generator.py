@@ -603,6 +603,33 @@ import re as _re
 import logging as _logging
 _wq_log = _logging.getLogger(__name__)
 
+
+def _name_variants(name):
+    """Filozof adının farklı Wikiquote varyantlarını üretir."""
+    variants = [name]
+    parts = name.strip().split()
+    if len(parts) >= 2:
+        # Sadece soyad: "Nietzsche", "Aristoteles"
+        variants.append(parts[-1])
+        # Sadece ilk ad
+        variants.append(parts[0])
+        # Soyad + İlk ad (ters)
+        variants.append("%s %s" % (parts[-1], parts[0]))
+    # Parantez varsa temizle: "Laozi (Lao Tzu)" -> "Laozi", "Lao Tzu"
+    import re as _re2
+    m = _re2.search(r"\(([^)]+)\)", name)
+    if m:
+        variants.append(name[:name.index("(")].strip())
+        variants.append(m.group(1).strip())
+    # Tekrarlananları çıkar, sırayı koru
+    seen = set()
+    result = []
+    for v in variants:
+        if v and v not in seen:
+            seen.add(v)
+            result.append(v)
+    return result
+
 def _fetch_real_quotes_from_wikipedia(philosopher):
     """
     Wikiquote TR ve EN'den filozofun GERCEK sozlerini cekerr.
@@ -628,27 +655,31 @@ def _fetch_real_quotes_from_wikipedia(philosopher):
                 quotes.append(clean)
         return quotes
 
+    # Deneme isimleri: tam isim, soyadı, ilk adın kısaltması
+    name_variants = _name_variants(philosopher)
+
     for lang in ("tr", "en"):
-        try:
-            r = _req.get(
-                "https://%s.wikiquote.org/w/api.php" % lang,
-                params={"action": "parse", "page": philosopher, "prop": "wikitext", "format": "json"},
-                timeout=15,
-            )
-            if r.status_code != 200:
-                continue
-            data = r.json()
-            if "error" in data:
-                continue
-            wikitext = data.get("parse", {}).get("wikitext", {}).get("*", "")
-            if not wikitext:
-                continue
-            quotes = _parse_wikitext(wikitext)
-            if quotes:
-                _wq_log.info("Wikiquote %s: %s — %d soz" % (lang.upper(), philosopher, len(quotes)))
-                return quotes[:25], lang
-        except Exception as e:
-            _wq_log.warning("Wikiquote %s hatasi (%s): %s" % (lang, philosopher, e))
+        for name in name_variants:
+            try:
+                r = _req.get(
+                    "https://%s.wikiquote.org/w/api.php" % lang,
+                    params={"action": "parse", "page": name, "prop": "wikitext", "format": "json"},
+                    timeout=15,
+                )
+                if r.status_code != 200:
+                    continue
+                data = r.json()
+                if "error" in data:
+                    continue
+                wikitext = data.get("parse", {}).get("wikitext", {}).get("*", "")
+                if not wikitext:
+                    continue
+                quotes = _parse_wikitext(wikitext)
+                if quotes:
+                    _wq_log.info("Wikiquote %s [%s]: %s — %d soz" % (lang.upper(), name, philosopher, len(quotes)))
+                    return quotes[:25], lang
+            except Exception as e:
+                _wq_log.warning("Wikiquote %s [%s] hatasi: %s" % (lang, name, e))
 
     return [], "tr"
 
