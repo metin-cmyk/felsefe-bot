@@ -97,14 +97,15 @@ def _font(size, style="bold"):
 def _make_image(size, quote_data, palette):
     w, h = size
     
-    # --- ATATÜRK KONTROLÜ ---
-    is_ataturk = "atatürk" in quote_data.get("author", "").lower()
+    # --- ATATÜRK KONTROLÜ (Siyah Arkaplan Beyaz Yazı) ---
+    author_name = quote_data.get("author", "").lower()
+    is_ataturk = "atatürk" in author_name or "mustafa kemal" in author_name
     
     if is_ataturk:
         bg_color   = (0, 0, 0)
         text_color = (255, 255, 255)
         accent     = (255, 255, 255)
-        sub_color  = (200, 200, 200)
+        sub_color  = (180, 180, 180)
     else:
         bg_color   = _hex(palette["bg"])
         text_color = _hex(palette["text"])
@@ -122,6 +123,7 @@ def _make_image(size, quote_data, palette):
     margin    = 110
     usable_w  = w - (margin * 2)
 
+    # --- Yazı Boyutu ve Sarma ---
     f_q = _font(78, "bold")
     lh  = 105
 
@@ -136,8 +138,7 @@ def _make_image(size, quote_data, palette):
             current = word
         else:
             current = test
-    if current:
-        lines.append(current)
+    if current: lines.append(current)
 
     if len(lines) > 6:
         f_q = _font(64, "bold")
@@ -152,8 +153,7 @@ def _make_image(size, quote_data, palette):
                 current = word
             else:
                 current = test
-        if current:
-            lines.append(current)
+        if current: lines.append(current)
 
     total_h = len(lines) * lh
     y = int(h * 0.42) - total_h // 2
@@ -165,20 +165,24 @@ def _make_image(size, quote_data, palette):
         draw.text((x, y), line, font=f_q, fill=text_color)
         y += lh
 
+    # Ayraç
     line_y = y + 45
     draw.rectangle([(w//2)-70, line_y, (w//2)+70, line_y+2], fill=accent)
 
+    # Yazar
     f_author    = _font(52, "italic")
     author_text = "— %s" % author
     bbox        = draw.textbbox((0,0), author_text, font=f_author)
     aw          = bbox[2] - bbox[0]
     draw.text(((w-aw)//2, line_y+22), author_text, font=f_author, fill=accent)
 
+    # Akım
     f_akim = _font(36, "regular")
     bbox   = draw.textbbox((0,0), akim, font=f_akim)
     aw2    = bbox[2] - bbox[0]
     draw.text(((w-aw2)//2, line_y+96), akim, font=f_akim, fill=sub_color)
 
+    # Filigran (Sadece Söz Paylaşımlarında Kalır)
     handle_y = int(h * 0.87)
     f_handle = _font(42, "bold")
     bbox     = draw.textbbox((0,0), SITE_HANDLE, font=f_handle)
@@ -207,13 +211,15 @@ def create_story_image(quote_data, palette):
 
 def create_square_cover(title, subtitle=""):
     """
-    Filozof Kapak: Ismi dikey yazar. 
-    Atatürk ise Siyah/Beyaz yapar ve filigran yoktur.
+    Filozof Kapak: İsim alt alta, filigransız. 
+    Atatürk ise Siyah-Beyaz.
     """
     palette = random.choice(PALETTES)
     w, h = 1080, 1080
     
-    if "atatürk" in title.lower():
+    is_ataturk = "atatürk" in title.lower() or "mustafa kemal" in title.lower()
+    
+    if is_ataturk:
         bg_color   = (0, 0, 0)
         text_color = (255, 255, 255)
     else:
@@ -227,20 +233,15 @@ def create_square_cover(title, subtitle=""):
     if not words: words = ["Anonim"]
     
     count = len(words)
-    if count <= 2: f_size = 180
-    elif count == 3: f_size = 150
-    else: f_size = 120
-    
+    f_size = 180 if count <= 2 else (150 if count == 3 else 120)
     f_title = _font(f_size, "bold")
     
     line_h = f_size * 1.2
-    total_text_h = count * line_h
-    y = (h - total_text_h) // 2
+    y = (h - (count * line_h)) // 2
 
     for word in words:
         bbox = draw.textbbox((0, 0), word, font=f_title)
-        tw = bbox[2] - bbox[0]
-        draw.text(((w - tw)//2, y), word, font=f_title, fill=text_color)
+        draw.text(((w - (bbox[2] - bbox[0]))//2, y), word, font=f_title, fill=text_color)
         y += line_h
 
     safe_name = re.sub(r"[^a-z0-9]", "_", title.lower())
