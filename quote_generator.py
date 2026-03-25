@@ -551,7 +551,10 @@ def generate_quote():
         if real_quotes:
             # Gercek sozler bulundu — Claude sadece secer ve formatlar
             raw = _select_best_quote(filozof, akim, konu, real_quotes)
-            return _parse(raw, filozof, akim)
+            result = _parse(raw, filozof, akim)
+            if result and result.get("quote"):
+                return result
+            log.warning("Parse bos dondu, baska filozof deneniyor.")
 
         # Bu filozof icin soz bulunamadi — baska birini dene
         log.warning("Wikiquote'ta soz bulunamadi: %s — baska filozof deneniyor (%d/%d)" % (filozof, deneme+1, MAX_DENEME))
@@ -579,6 +582,12 @@ def _parse(text, default_autor, default_akim):
         return m.group(1).strip() if m else ""
 
     quote = _clean_quotes(get("SOZ"))
+
+    # Boş söz — parse başarısız, None dön
+    if not quote or len(quote.strip()) < 10:
+        log.warning("Parse sonucu bos soz geldi, atlaniyor.")
+        return None
+
     author = get("YAZAR")
     if not author or "az bilinen" in author.lower():
         author = default_autor if "az bilinen" not in default_autor.lower() else "Anonim Bilge"
