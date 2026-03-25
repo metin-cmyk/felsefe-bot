@@ -3,12 +3,11 @@ from pathlib import Path
 
 log = logging.getLogger(__name__)
 
-# --- WordPress Ayarları ---
+# --- Ayarlar ---
 WP_URL      = os.environ.get("WP_URL", "https://felsefemiz.net")
 WP_USER     = os.environ.get("WP_USER", "serezart")
 WP_APP_PASS = os.environ.get("WP_APP_PASS", "")
 
-# --- Sosyal Medya Ayarları ---
 META_ACCESS_TOKEN    = os.environ.get("META_ACCESS_TOKEN", "")
 INSTAGRAM_ACCOUNT_ID = os.environ.get("INSTAGRAM_ACCOUNT_ID", "")
 FACEBOOK_PAGE_ID     = os.environ.get("FACEBOOK_PAGE_ID", "")
@@ -24,7 +23,7 @@ def _wp_upload_image(image_path):
     with open(image_path, "rb") as f: img_data = f.read()
     filename = Path(image_path).name
     r = requests.post(
-        "%s/wp-json/wp/v2/media" % WP_URL,
+        f"{WP_URL}/wp-json/wp/v2/media",
         auth=(WP_USER, WP_APP_PASS),
         headers={"Content-Disposition": f"attachment; filename={filename}", "Content-Type": "image/jpeg"},
         data=img_data, timeout=60
@@ -33,16 +32,15 @@ def _wp_upload_image(image_path):
     return r.json()["id"]
 
 def _generate_philosopher_info(term_name):
-    """Claude'dan detayli biyografi alir."""
+    """Claude'dan detayli ve gercek bilgileri zorla alir."""
     try:
-        # Dairesel importu onlemek icin fonksiyon icinde import
-        import quote_generator 
+        import quote_generator
         client = quote_generator.client
         
-        prompt = (f"{term_name} kimdir? Bu filozofun hayatini, en onemli felsefi goruslerini ve "
-                  f"dunya dusunce tarihine katkilarini anlatan profesyonel, ansiklopedik bir yazi yaz. "
-                  f"Yazi en az 3 paragraf olsun. Ayrica dogum-olum tarihlerini belirt. "
-                  f"Format kesinlikle su olsun:\nTARIH: [Tarihler]\nBIYO: [Detayli Biyografi]")
+        prompt = (f"{term_name} kimdir? Bu düsünürün felsefesini, hayatini ve en önemli eserlerini "
+                  f"anlatan akademik ve derinlikli bir yazi yaz. 3-4 paragraf olsun. "
+                  f"Uydurma bilgi verme, ansiklopedik dogruluga sadik kal. "
+                  f"Format kesinlikle su olsun:\nTARIH: [Dogum ve Ölüm Yili]\nBIYO: [Detayli Biyografi Metni]")
         
         msg = client.messages.create(
             model="claude-3-5-sonnet-20240620",
@@ -58,7 +56,7 @@ def _generate_philosopher_info(term_name):
         return tarih, biyo
     except Exception as e:
         log.error(f"AI Bilgi hatasi: {e}")
-        return "Bilinmiyor", f"{term_name}, felsefe dünyasında önemli izler bırakmış bir düşünürdür."
+        return "Bilinmiyor", f"{term_name} üzerine felsefi bir inceleme."
 
 def _ensure_term_with_cover(taxonomy_slug, term_name, subtitle_text):
     if not WP_APP_PASS or not term_name: return None
@@ -69,7 +67,7 @@ def _ensure_term_with_cover(taxonomy_slug, term_name, subtitle_text):
             for term in r.json():
                 if term["name"].lower() == term_name.lower(): return term["id"]
 
-        log.info(f"Yeni {taxonomy_slug} bulundu: {term_name}. Hazirliklar basliyor...")
+        log.info(f"Yeni {taxonomy_slug} saptandi: {term_name}. Hazirliklar basliyor...")
         from image_generator import create_square_cover
         cover_path = create_square_cover(term_name, subtitle=subtitle_text)
         media_id = _wp_upload_image(cover_path)
@@ -78,7 +76,7 @@ def _ensure_term_with_cover(taxonomy_slug, term_name, subtitle_text):
         if taxonomy_slug == "filozof":
             tarih, biyo = _generate_philosopher_info(term_name)
         else:
-            biyo = f"{term_name} akımı üzerine kapsamlı inceleme."
+            biyo = f"{term_name} akimi üzerine kapsamli felsefi inceleme."
 
         payload = {
             "name": term_name,
@@ -106,21 +104,31 @@ def _get_or_create_wp_tag(tag_name):
     except Exception: pass
     return None
 
+def _upload_to_imgbb(image_path):
+    if not IMGBB_API_KEY: return None
+    with open(image_path, "rb") as f: data = base64.b64encode(f.read()).decode("utf-8")
+    r = requests.post("https://api.imgbb.com/1/upload", data={"key": IMGBB_API_KEY, "image": data}, timeout=30)
+    return r.json()["data"]["url"] if r.status_code == 200 else None
+
 def post_to_wordpress(quote_data, post_img):
+    """
+    Bu fonksiyonu bot.py dogrudan cagiriyorsa publish_all icindekini siliyoruz.
+    Çift paylasimi önlemek icin ana fonksiyon budur.
+    """
     if not WP_APP_PASS: return None
     akim = quote_data.get("akim", "Genel Felsefe")
     yazar = quote_data.get("author", "Anonim")
     title = f"{yazar} - {akim} Sözleri"
 
-    cat_id = _ensure_term_with_cover("categories", akim, "Felsefi Akımlar")
-    filozof_id = _ensure_term_with_cover("filozof", yazar, "Tarihe Yön Veren Düşünürler")
+    cat_id = _ensure_term_with_cover("categories", akim, "Felsefi Akimlar")
+    filozof_id = _ensure_term_with_cover("filozof", yazar, "Tarihe Yön Veren Düsünürler")
 
     raw_hashtags = quote_data.get("hashtags", "").split()
     tag_ids = [t for t in [_get_or_create_wp_tag(rt.replace("#", "").strip()) for rt in raw_hashtags] if t]
     
     media_id = None
     try: media_id = _wp_upload_image(post_img)
-    except Exception as e: log.error(f"Post gorseli yuklenemedi: {e}")
+    except Exception: pass
 
     post_data = {
         "title": title, "content": "", "status": "publish",
@@ -140,23 +148,19 @@ def post_to_wordpress(quote_data, post_img):
     r = requests.post(f"{WP_URL}/wp-json/wp/v2/posts", auth=(WP_USER, WP_APP_PASS), json=post_data, timeout=30)
     return r.json().get("link", "")
 
-# --- Sosyal Medya Yardımcıları ---
-def _upload_to_imgbb(image_path):
-    if not IMGBB_API_KEY: return None
-    with open(image_path, "rb") as f: data = base64.b64encode(f.read()).decode("utf-8")
-    r = requests.post("https://api.imgbb.com/1/upload", data={"key": IMGBB_API_KEY, "image": data}, timeout=30)
-    return r.json()["data"]["url"] if r.status_code == 200 else None
-
 def publish_all(quote_data, post_img, story_img):
-    log.info("Yayinlama sureci basladi...")
+    """
+    DIKKAT: Çift paylasimi önlemek icin post_to_wordpress cagrisi buradadir.
+    Eger bot.py hem bunu hem post_to_wordpress'i cagiriyorsa birini silmelisin.
+    """
+    log.info("Paylasim zinciri tetiklendi...")
     
-    # 1. WordPress
+    # 1. WordPress Paylasimi (TEK YER)
     wp_link = post_to_wordpress(quote_data, post_img)
-    log.info(f"WP Tamam: {wp_link}")
     
+    # 2. Sosyal Medya
     caption = f"{quote_data['quote']}\n\n— {quote_data['author']} | {quote_data['akim']}\n\n{quote_data.get('hashtags', '')}"
 
-    # 2. Instagram & Facebook (Meta)
     if META_ACCESS_TOKEN and INSTAGRAM_ACCOUNT_ID:
         try:
             img_url = _upload_to_imgbb(post_img)
@@ -170,7 +174,6 @@ def publish_all(quote_data, post_img, story_img):
                     requests.post(f"{GRAPH}/{FACEBOOK_PAGE_ID}/photos", data={"caption": caption, "access_token": META_ACCESS_TOKEN}, files={"source": f})
         except Exception as e: log.error(f"Meta Hatasi: {e}")
 
-    # 3. Twitter (Tweepy)
     if TWITTER_ACCESS_TOKEN:
         try:
             import tweepy
