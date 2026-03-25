@@ -805,36 +805,37 @@ def _select_best_quote(philosopher, akim, konu, quotes_list):
     """
     quotes_text = "\n".join(["  %d. %s" % (i+1, q) for i, q in enumerate(quotes_list)])
 
-    system = """Sen bir felsefe editorusun. Sana filozofun GERCEK, dogrulanmis sozleri verilecek.
-Gorev: Bu listeden konuya EN UYGUN ve EN GUCLU sozi sec, gerekirse Turkce'ye cevir, formatla.
+    system = """Sen bir felsefe editörüsün. Sana filozofun GERÇEK, doğrulanmış sözleri verilecek.
+Görev: Bu listeden konuya EN UYGUN ve EN GÜÇLÜ sözü seç, gerekirse Türkçeye çevir, formatla.
 
-KESIN KURALLAR:
-1. Listede OLMAYAN hicbir soz yazma veya uydurma. Sadece verilen listeden sec.
-2. Ingilizce sozleri akici Turkce'ye cevir — anlami DEGISTIRME, sadece cevir.
-3. Zaten Turkce ise oldugu gibi birak.
-4. SOZ alaninda tirnak isareti (\", \', \u201c, \u201d) KULLANMA.
-5. Hashtagleri # ile baslat, Turkce karakter KULLANMA (o,u,s,c,i,g seklinde yaz).
-6. TWITTER alaninda sadece soz ve yazar olsun, hashtag YAZMA.
+KESİN KURALLAR:
+1. Listede OLMAYAN hiçbir söz yazma veya uydurma. Sadece verilen listeden seç.
+2. İngilizce sözleri akıcı Türkçeye çevir — anlamı DEĞİŞTİRME, sadece çevir.
+3. Çevirirken Türkçe karakterleri MUTLAKA kullan: ç, ş, ğ, ü, ö, ı, İ, Ğ, Ş, Ç, Ü, Ö
+4. Zaten Türkçe ise olduğu gibi bırak, karakterleri bozmadan koru.
+5. SOZ alanında tırnak işareti (", ', «, ») KULLANMA.
+6. Hashtagleri # ile başlat, Türkçe karakter KULLANMA (o,u,s,c,i,g şeklinde yaz).
+7. TWITTER alanında sadece söz ve yazar olsun, hashtag YAZMA.
 
-Yanitini TAM OLARAK bu formatta ver:
+Yanıtını TAM OLARAK bu formatta ver:
 
 SOZ:
-[Secilen sozun Turkce hali — tirnak YOK, max 250 karakter]
+[Seçilen sözün Türkçe hali — tırnak YOK, Türkçe karakterler korunmuş, max 250 karakter]
 ---
 YAZAR:
-[Filozofun adi]
+[Filozofun adı]
 ---
 AKIM:
-[Felsefi akim]
+[Felsefi akım]
 ---
 HASHTAG:
 [5 hashtag — #Felsefe ve #Bilgelik zorunlu, 3 tane daha konuya uygun]
 ---
 ACIKLAMA:
-[Sozun 2-3 cumlelik Turkce aciklamasi — felsefi baglamini anlat]
+[Sözün 2-3 cümlelik Türkçe açıklaması — felsefi bağlamını anlat]
 ---
 TWITTER:
-[Soz tirnaksiz — Yazar Adi]"""
+[Söz tırnaksız — Yazar Adı]"""
 
     msg = client.messages.create(
         model="claude-sonnet-4-20250514",
