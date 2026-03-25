@@ -404,30 +404,49 @@ def _build_title(quote_data):
 # ---------------------------------------------------------------------------
 
 def _build_content(quote_data):
+    """
+    Yazı içeriği — sadece söz blockquote'u ve hashtag'ler.
+    Editörün yorumu ACF aciklama alanına yazılır, buraya değil.
+    """
     soz      = quote_data.get("quote", "")
     yazar    = quote_data.get("author", "Anonim")
     akim     = quote_data.get("akim", "Felsefe")
-    aciklama = quote_data.get("aciklama", "")
     hashtags = quote_data.get("hashtags", "#Felsefe #Bilgelik")
 
     parts = []
+
+    # Söz blockquote
     parts.append(
         '<blockquote class="wp-block-quote"><p><em>"%s"</em></p>'
         "<cite>— %s | %s</cite></blockquote>" % (soz, yazar, akim)
     )
 
-    prompt = (
-        "Aşağıdaki felsefi sözü analiz ederek Türkçe, akıcı, özgün 4-5 cümlelik editör yorumu yaz. "
-        "Sözün modern hayattaki anlamını ve felsefi arka planını vurgula. Kendi cümlelerinle yaz.\n\n"
-        "Söz: %s\nYazar: %s\nAkım: %s\nAçıklama: %s"
-    ) % (soz, yazar, akim, aciklama)
-    editor = _claude(prompt) or aciklama or (
-        "%s felsefesinin bu sözü, modern insanın varoluşsal sorularına ışık tutar." % akim
-    )
-    parts.append("<h2>Editörün Yorumu</h2><p>%s</p>" % editor.replace("\n\n", "</p><p>"))
+    # Hashtag'ler
     parts.append('<p class="felsefemiz-tags">%s</p>' % hashtags)
 
     return "\n\n".join(parts)
+
+
+def _build_aciklama(quote_data):
+    """
+    ACF aciklama alanı için editörün yorumunu Claude ile üretir.
+    Yazı içeriğine değil, sadece bu alana yazılır.
+    """
+    soz      = quote_data.get("quote", "")
+    yazar    = quote_data.get("author", "Anonim")
+    akim     = quote_data.get("akim", "Felsefe")
+    aciklama = quote_data.get("aciklama", "")
+
+    prompt = (
+        "Aşağıdaki felsefi sözü analiz ederek Türkçe, akıcı, özgün 4-5 cümlelik editör yorumu yaz. "
+        "Sözün modern hayattaki anlamını ve felsefi arka planını vurgula. Kendi cümlelerinle yaz.\n\n"
+        "Söz: %s\nYazar: %s\nAkım: %s\nMevcut açıklama: %s"
+    ) % (soz, yazar, akim, aciklama)
+
+    editor = _claude(prompt, max_tokens=600)
+    return editor or aciklama or (
+        "%s felsefesinin bu sözü, modern insanın varoluşsal sorularına ışık tutmaktadır." % akim
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -481,6 +500,10 @@ def post_to_wordpress(quote_data, post_img):
     excerpt = aciklama or soz[:160]
 
     # 7. Post oluştur
+    # Editörün yorumu — sadece ACF aciklama alanına yaz
+    log.info("Editör yorumu üretiliyor...")
+    editor_aciklama = _build_aciklama(quote_data)
+
     post_data = {
         "title":          title,
         "content":        content,
@@ -493,7 +516,7 @@ def post_to_wordpress(quote_data, post_img):
             "felsefi_soz":  soz,
             "yazar":        yazar,
             "felsefi_akim": akim,
-            "aciklama":     aciklama,
+            "aciklama":     editor_aciklama,
             "twitter_text": quote_data.get("twitter", ""),
         },
     }
