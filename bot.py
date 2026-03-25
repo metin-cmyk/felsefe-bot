@@ -33,8 +33,8 @@ def _queue_worker():
             quote_data, post_img, story_img = item
             _do_publish(quote_data, post_img, story_img)
             _publish_queue.task_done()
-            # İçerikler arası bekleme — API rate limit önlemi
-            time.sleep(3)
+            # İçerikler arası bekleme — WP API rate limit önlemi
+            time.sleep(15)
         except queue.Empty:
             continue
         except Exception as e:
@@ -65,7 +65,7 @@ def _do_publish(quote_data, post_img, story_img):
     log.info("Yayinlaniyor: %s" % author)
 
     MAX_RETRY = 4
-    RETRY_WAIT = [10, 30, 60, 120]  # saniye
+    RETRY_WAIT = [20, 60, 120, 300]  # saniye — WP API rate limit için
 
     for attempt in range(MAX_RETRY):
         try:
@@ -91,13 +91,12 @@ def _do_publish(quote_data, post_img, story_img):
 
         if attempt < MAX_RETRY - 1:
             wait = RETRY_WAIT[attempt]
-            log.info("API hatasi — %d saniye beklenip tekrar denenecek..." % wait)
-            _send_msg("⏳ API engeli, %d saniye bekleniyor... (%s)" % (wait, author))
+            log.info("API hatasi — %d saniye sessizce bekleniyor... (%s)" % (wait, author))
             time.sleep(wait)
 
-    # Tüm denemeler başarısız
-    log.error("TÜM DENEMELER BAŞARISIZ: %s" % author)
-    _send_msg("❌ Yayınlanamadı (%d deneme sonrası): %s" % (MAX_RETRY, author))
+    # Tüm denemeler başarısız — sadece o zaman Telegram'a bildir
+    log.error("TUM DENEMELER BASARISIZ: %s" % author)
+    _send_msg("❌ %s yayınlanamadı, loglara bakın." % author)
 
 # ---------------------------------------------------------------------------
 # Kayıt
