@@ -96,10 +96,20 @@ def _font(size, style="bold"):
 
 def _make_image(size, quote_data, palette):
     w, h = size
-    bg_color   = _hex(palette["bg"])
-    text_color = _hex(palette["text"])
-    accent     = _hex(palette["accent"])
-    sub_color  = _hex(palette["sub"])
+    
+    # --- ATATÜRK KONTROLÜ (Söz Paylaşımları İçin) ---
+    is_ataturk = "atatürk" in quote_data.get("author", "").lower()
+    
+    if is_ataturk:
+        bg_color   = (0, 0, 0)       # Siyah zemin
+        text_color = (255, 255, 255) # Beyaz yazı
+        accent     = (255, 255, 255) # Beyaz ayraç
+        sub_color  = (200, 200, 200) # Gri alt yazı
+    else:
+        bg_color   = _hex(palette["bg"])
+        text_color = _hex(palette["text"])
+        accent     = _hex(palette["accent"])
+        sub_color  = _hex(palette["sub"])
 
     img  = Image.new("RGB", size, bg_color)
     draw = ImageDraw.Draw(img)
@@ -197,18 +207,24 @@ def create_story_image(quote_data, palette):
 
 def create_square_cover(title, subtitle=""):
     """
-    Filozof Kapak Gorseli: Ismi dikey yazar, filigrani ve cerceveyi kaldirir.
-    Orijinal paletleri ve font sistemini kullanir.
+    Filozof Kapak Gorseli: Ismi dikey yazar (Mustafa / Kemal / Ataturk gibi).
+    Atatürk ise zemini siyah, ismi beyaz yapar ve filigrani kaldirir.
     """
     palette = random.choice(PALETTES)
     w, h = 1080, 1080
-    bg_color   = _hex(palette["bg"])
-    text_color = _hex(palette["text"])
+    
+    # --- ATATÜRK KONTROLÜ (Kapak Görselleri İçin) ---
+    if "atatürk" in title.lower():
+        bg_color   = (0, 0, 0)
+        text_color = (255, 255, 255)
+    else:
+        bg_color   = _hex(palette["bg"])
+        text_color = _hex(palette["text"])
 
     img = Image.new("RGB", (w, h), bg_color)
     draw = ImageDraw.Draw(img)
 
-    # İsimleri kelime kelime böl (Örn: Mustafa / Kemal / Atatürk)
+    # İsimleri kelime kelime böl
     words = title.strip().split()
     if not words: words = ["Anonim"]
     
@@ -219,7 +235,6 @@ def create_square_cover(title, subtitle=""):
     
     f_title = _font(f_size, "bold")
     
-    # Dikey ortalama hesabı
     line_h = f_size * 1.2
     total_text_h = count * line_h
     y = (h - total_text_h) // 2
