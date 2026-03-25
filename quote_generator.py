@@ -375,15 +375,15 @@ client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
 # 50'den Fazla Felsefi Akım, İnanç ve Gelenek
 AKIMLAR = [
     "Stoacılık", "Budizm", "Taoizm", "Varoluşçuluk", "Nihilizm", "Pragmatizm", "Epikürcülük", 
-    "Skeptisizm", "Fenomenoloji", "Tasavvuf (Sufizm)", "İslam Felsefesi", "Türk Düşünce Tarihi",
+    "Skeptisizm", "Fenomenoloji", "Türk Düşünce Tarihi",
     "Antik Yunan Felsefesi", "Aydınlanma Felsefesi", "Rasyonalizm", "Empirizm", "İdealizm", 
     "Materyalizm", "Absürdizm", "Hümanizm", "Psikanaliz ve Derinlik Psikolojisi", "Postmodernizm", 
     "Romantizm", "Kinik Felsefe", "Yeni Platonculuk", "Hermeneutik", "Zen Budizmi", "Hint Felsefesi (Vedanta)", 
-    "Divan Edebiyatı (Felsefi Yönü)", "Yapısalcılık", "Frankfurt Okulu", "Skolastik Felsefe", 
-    "Gnostisizm", "Panteizm", "Sofistler", "Elea Okulu", "Egzistansiyel Psikoterapi", "Klasik Alman Felsefesi", 
-    "Mistisizm", "Sokrates Öncesi Felsefe", "Kozmoloji", "Kinizm", "Şintoizm (Felsefi Boyutu)", 
-    "Kabalistik Felsefe", "Simya ve Okültizm", "Kıta Avrupası Felsefesi", "Analitik Felsefe", 
-    "Faydacılık (Utilitarianism)", "Kişiselcilik (Personalizm)", "Post-yapısalcılık", "Karanlık Aydınlanma"
+    "Yapısalcılık", "Frankfurt Okulu", "Skolastik Felsefe", 
+    "Sofistler", "Elea Okulu", "Egzistansiyel Psikoterapi", "Klasik Alman Felsefesi", 
+    "Sokrates Öncesi Felsefe", "Kozmoloji", "Kinizm", 
+    "Kıta Avrupası Felsefesi", "Analitik Felsefe", 
+    "Faydacılık (Utilitarianism)", "Kişiselcilik (Personalizm)", "Post-yapısalcılık",
 ]
 
 # 500'den Fazla Düşünür (Dev Havuz)
@@ -396,8 +396,6 @@ FILOZOFLAR = {
     "Absürdizm": ["Albert Camus", "Samuel Beckett", "Franz Kafka", "Eugene Ionesco", "Daniil Kharms", "Thomas Bernhard", "Fernando Pessoa"],
     "Antik Yunan Felsefesi": ["Sokrates", "Platon", "Aristoteles", "Diyojen", "Herakleitos", "Pisagor", "Thales", "Parmenides", "Demokritos", "Anaksimandros", "Anaksimenes", "Empedokles", "Anaksagoras", "Zenon (Elealı)", "Protagoras", "Ksenofanes", "Gorgias", "Antisthenes"],
     "Epikürcülük": ["Epikür", "Lucretius", "Metrodorus", "Hermarchus", "Philodemus", "Polyaenus", "Colotes", "Leontion"],
-    "Tasavvuf (Sufizm)": ["Mevlana Celaleddin Rumi", "Yunus Emre", "Hacı Bektaş Veli", "Şems-i Tebrizi", "Muhyiddin İbn'ül-Arabi", "Niyazi Mısri", "Ahmet Yesevi", "Hacı Bayram Veli", "Şeyh Galip", "Hallac-ı Mansur", "Feridüddin Attar", "Rabia el-Adeviyye", "Beyazıd-ı Bistami", "Erzurumlu İbrahim Hakkı", "Akşemseddin", "Eşrefoğlu Rumi", "Aziz Mahmud Hüdayi", "Somuncu Baba", "Şah-ı Nakşibend", "Abdülkadir Geylani", "Sadreddin Konevi", "İmam Rabbani", "Molla Cami", "Hafız Şirazi", "Sadi Şirazi", "Fuzuli", "Pir Sultan Abdal", "Seyyid Nesimi", "Şabani Veli", "Merkez Efendi", "Ebul Hasan Harakani", "Şibli", "Cüneyd-i Bağdadi"],
-    "İslam Felsefesi": ["Farabi", "İbn Sina", "Gazali", "İbn Rüşd", "İbn Haldun", "El-Kindi", "Sühreverdi", "İbn Bacce", "İbn Tufeyl", "Ömer Hayyam", "Molla Sadra", "Fahreddin Razi", "İbn Hazm", "Nasîrüddin Tûsî", "İhvan-ı Safa", "Biruni", "Sühreverdi el-Maktul", "İbnü'n-Nefis"],
     "Türk Düşünce Tarihi": ["Mustafa Kemal Atatürk", "Ziya Gökalp", "Nurettin Topçu", "Cemil Meriç", "Yusuf Has Hacib", "İoanna Kuçuradi", "Hilmi Ziya Ülken", "Ahmet Hamdi Tanpınar", "Oğuz Atay", "Kemal Tahir", "Yusuf Akçura", "İsmail Hakkı Baltacıoğlu", "Sabahattin Ali", "Teoman Duralı", "Macit Gökberk", "Niyazi Berkes", "Bedia Akarsu", "Yalçın Koç", "Namık Kemal", "Ali Suavi", "Prens Sabahaddin", "Erol Güngör", "Şerif Mardin", "Kemal Karpat", "İdris Küçükömer", "Sezai Karakoç", "İsmet Özel", "Attila İlhan", "Dursun Erkip"],
     "Aydınlanma Felsefesi": ["Immanuel Kant", "Jean-Jacques Rousseau", "Voltaire", "John Locke", "David Hume", "Montesquieu", "Denis Diderot", "Thomas Paine", "Adam Smith", "Cesare Beccaria", "Gotthold Ephraim Lessing", "Baron d'Holbach", "Marquis de Condorcet", "Mary Wollstonecraft"],
     "Rasyonalizm": ["Rene Descartes", "Baruch Spinoza", "Gottfried Wilhelm Leibniz", "Nicolas Malebranche", "Christian Wolff", "Blaise Pascal", "Antoine Arnauld"],
@@ -411,7 +409,6 @@ FILOZOFLAR = {
     "Hint Felsefesi (Vedanta)": ["Adi Şankara", "Ramanuja", "Swami Vivekananda", "Sri Aurobindo", "Jiddu Krishnamurti", "Osho", "Ramana Maharshi", "Patanjali", "Mahavira", "Madhvacharya", "Chaitanya Mahaprabhu", "Nisargadatta Maharaj"],
     "Kinik Felsefe": ["Diyojen (Sinoplu)", "Antisthenes", "Krates", "Hipparkhia", "Bion", "Menippos", "Demetrios"],
     "Zen Budizmi": ["D.T. Suzuki", "Alan Watts", "Linji", "Hakuin", "Bankei", "Ikkyu", "Seung Sahn", "Eisai", "Huangbo", "Zhaozhou", "Mazu Daoyi"],
-    "Divan Edebiyatı (Felsefi Yönü)": ["Fuzuli", "Baki", "Nabi", "Nedim", "Şeyhülislam Yahya", "Nefi", "Karacaoğlan", "Pir Sultan Abdal", "Nesimi", "Kadı Burhaneddin", "Ruşeni", "Naili", "Neşati", "Naili-i Kadim", "Enderunlu Fazıl", "Zati", "Taşlıcalı Yahya"],
     "Frankfurt Okulu": ["Theodor W. Adorno", "Max Horkheimer", "Walter Benjamin", "Herbert Marcuse", "Jürgen Habermas", "Erich Fromm", "Siegfried Kracauer", "Leo Löwenthal", "Axel Honneth"],
     "Skolastik Felsefe": ["Thomas Aquinas", "Anselmus", "Duns Scotus", "Bonaventura", "Ockhamlı William", "Pierre Abelard", "Albertus Magnus", "Boethius", "Erigena"],
     "Mistisizm": ["Eckhart Tolle", "Meister Eckhart", "Hildegard von Bingen", "Teresa of Avila", "John of the Cross", "Jakob Böhme", "Gurdjieff", "Emanuel Swedenborg", "William Law", "Julian of Norwich", "Marguerite Porete", "Simeon the New Theologian"]

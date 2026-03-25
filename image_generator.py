@@ -6,7 +6,8 @@ import numpy as np
 OUTPUT_DIR = Path("images")
 OUTPUT_DIR.mkdir(exist_ok=True)
 
-SITE_HANDLE = "felsefemiz.net"
+SITE_HANDLE_BOLD    = "felsefemiz"
+SITE_HANDLE_REGULAR = ".net"
 
 # Font dosyaları projenin kendi klasöründe
 BASE_DIR = Path(__file__).parent
@@ -16,6 +17,22 @@ FONT = {
     "italic":      BASE_DIR / "DejaVuSerif-Italic.ttf",
     "bold_italic": BASE_DIR / "DejaVuSerif-BoldItalic.ttf",
 }
+
+# Montserrat — site handle için (varsa kullan, yoksa DejaVuSerif'e düş)
+MONTSERRAT = {
+    "bold":    BASE_DIR / "Montserrat-Bold.ttf",
+    "regular": BASE_DIR / "Montserrat-Regular.ttf",
+}
+
+def _montserrat(size, style="bold"):
+    """Montserrat fontu yükler; yoksa DejaVuSerif'e düşer."""
+    path = MONTSERRAT.get(style, MONTSERRAT["bold"])
+    try:
+        if path.exists():
+            return ImageFont.truetype(str(path), size)
+    except Exception:
+        pass
+    return _font(size, style)
 
 POST_SIZE  = (1080, 1350)
 STORY_SIZE = (1080, 1920)
@@ -124,7 +141,7 @@ def _make_image(size, quote_data, palette):
     usable_w  = w - (margin * 2)
 
     # --- Yazı Boyutu ve Sarma ---
-    f_q = _font(74, "bold")
+    f_q = _font(70, "bold")
     lh  = 105
 
     words   = quoted_text.split()
@@ -141,7 +158,7 @@ def _make_image(size, quote_data, palette):
     if current: lines.append(current)
 
     if len(lines) > 6:
-        f_q = _font(60, "bold")
+        f_q = _font(56, "bold")
         lh  = 88
         lines = []
         current = ""
@@ -170,24 +187,30 @@ def _make_image(size, quote_data, palette):
     draw.rectangle([(w//2)-70, line_y, (w//2)+70, line_y+2], fill=accent)
 
     # Yazar
-    f_author    = _font(48, "italic")
+    f_author    = _font(44, "italic")
     author_text = "— %s" % author
     bbox        = draw.textbbox((0,0), author_text, font=f_author)
     aw          = bbox[2] - bbox[0]
     draw.text(((w-aw)//2, line_y+22), author_text, font=f_author, fill=accent)
 
     # Akım
-    f_akim = _font(32, "regular")
+    f_akim = _font(28, "regular")
     bbox   = draw.textbbox((0,0), akim, font=f_akim)
     aw2    = bbox[2] - bbox[0]
     draw.text(((w-aw2)//2, line_y+96), akim, font=f_akim, fill=sub_color)
 
-    # Filigran (Sadece Söz Paylaşımlarında Kalır)
-    handle_y = int(h * 0.87)
-    f_handle = _font(38, "bold")
-    bbox     = draw.textbbox((0,0), SITE_HANDLE, font=f_handle)
-    hw       = bbox[2] - bbox[0]
-    draw.text(((w-hw)//2, handle_y), SITE_HANDLE, font=f_handle, fill=sub_color)
+    # Filigran — "felsefemiz" Montserrat Bold + ".net" Montserrat Regular
+    handle_y    = int(h * 0.87)
+    f_hbold     = _montserrat(34, "bold")
+    f_hreg      = _montserrat(34, "regular")
+    bbox_bold   = draw.textbbox((0,0), SITE_HANDLE_BOLD, font=f_hbold)
+    bbox_reg    = draw.textbbox((0,0), SITE_HANDLE_REGULAR, font=f_hreg)
+    w_bold      = bbox_bold[2] - bbox_bold[0]
+    w_reg       = bbox_reg[2]  - bbox_reg[0]
+    total_w     = w_bold + w_reg
+    x_start     = (w - total_w) // 2
+    draw.text((x_start, handle_y),          SITE_HANDLE_BOLD,    font=f_hbold, fill=sub_color)
+    draw.text((x_start + w_bold, handle_y), SITE_HANDLE_REGULAR, font=f_hreg,  fill=sub_color)
 
     return img
 
