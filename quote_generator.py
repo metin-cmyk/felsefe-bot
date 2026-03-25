@@ -604,24 +604,20 @@ import logging as _logging
 _wq_log = _logging.getLogger(__name__)
 
 
+
 def _name_variants(name):
-    """Filozof adının farklı Wikiquote varyantlarını üretir."""
+    """Filozof adinin farkli Wikiquote varyantlarini uretir."""
     variants = [name]
     parts = name.strip().split()
     if len(parts) >= 2:
-        # Sadece soyad: "Nietzsche", "Aristoteles"
         variants.append(parts[-1])
-        # Sadece ilk ad
         variants.append(parts[0])
-        # Soyad + İlk ad (ters)
         variants.append("%s %s" % (parts[-1], parts[0]))
-    # Parantez varsa temizle: "Laozi (Lao Tzu)" -> "Laozi", "Lao Tzu"
     import re as _re2
     m = _re2.search(r"\(([^)]+)\)", name)
     if m:
         variants.append(name[:name.index("(")].strip())
         variants.append(m.group(1).strip())
-    # Tekrarlananları çıkar, sırayı koru
     seen = set()
     result = []
     for v in variants:
@@ -630,11 +626,9 @@ def _name_variants(name):
             result.append(v)
     return result
 
-def _fetch_real_quotes_from_wikipedia(philosopher):
-    """
-    Wikiquote TR ve EN'den filozofun GERCEK sozlerini cekerr.
-    action=parse&prop=wikitext kullanir — tek dogru yontem.
-    """
+
+def _fetch_wikiquote(philosopher):
+    """Wikiquote TR ve EN wikitext API — en güvenilir kaynak."""
     import requests as _req
 
     def _parse_wikitext(wikitext):
@@ -649,22 +643,20 @@ def _fetch_real_quotes_from_wikipedia(philosopher):
             clean = _re.sub(r"<ref[^>]*>.*?</ref>", "", clean, flags=_re.DOTALL)
             clean = _re.sub(r"<br\s*/?>", " ", clean)
             clean = _re.sub(r"<[^>]+>", "", clean)
-            clean = _re.sub(r"('''|''|')", "", clean)
-            clean = clean.strip().strip('"').strip("'").strip()
+            clean = _re.sub(r"('''|'')", "", clean)
+            clean = clean.strip().strip('"').strip("\'").strip()
             if 25 < len(clean) < 400:
                 quotes.append(clean)
         return quotes
 
-    # Deneme isimleri: tam isim, soyadı, ilk adın kısaltması
     name_variants = _name_variants(philosopher)
-
     for lang in ("tr", "en"):
         for name in name_variants:
             try:
                 r = _req.get(
                     "https://%s.wikiquote.org/w/api.php" % lang,
                     params={"action": "parse", "page": name, "prop": "wikitext", "format": "json"},
-                    timeout=15,
+                    timeout=12,
                 )
                 if r.status_code != 200:
                     continue
@@ -676,34 +668,149 @@ def _fetch_real_quotes_from_wikipedia(philosopher):
                     continue
                 quotes = _parse_wikitext(wikitext)
                 if quotes:
-                    _wq_log.info("Wikiquote %s [%s]: %s — %d soz" % (lang.upper(), name, philosopher, len(quotes)))
-                    return quotes[:25], lang
+                    log.info("Wikiquote %s [%s]: %d soz" % (lang.upper(), name, len(quotes)))
+                    return quotes[:25]
             except Exception as e:
-                _wq_log.warning("Wikiquote %s [%s] hatasi: %s" % (lang, name, e))
+                log.warning("Wikiquote %s [%s] hatasi: %s" % (lang, name, e))
+    return []
 
-    return [], "tr"
 
+def _fetch_azquotes(philosopher):
+    """AZQuotes.com — HTML parse, genis koleksiyon."""
+    import requests as _req
+    from urllib.parse import quote as _uq
+    try:
+        # AZQuotes URL formatı: /author/first-last
+        slug = philosopher.lower()
+        slug = _re.sub(r"[^a-z0-9]+", "-", slug).strip("-")
+        url = "https://www.azquotes.com/author/%s" % slug
+        headers = {"User-Agent": "Mozilla/5.0 (compatible; felsefemiz-bot/1.0)"}
+        r = _req.get(url, headers=headers, timeout=12)
+        if r.status_code != 200:
+            return []
+        # <a class="title" ...> taglerini çıkar
+        quotes = _re.findall(r'<a[^>]+class="title"[^>]*>([^<]{20,350})</a>', r.text)
+        # HTML entity decode
+        import html as _html
+        quotes = [_html.unescape(q.strip()) for q in quotes if len(q.strip()) > 20]
+        if quotes:
+            log.info("AZQuotes [%s]: %d soz" % (philosopher, len(quotes)))
+        return quotes[:20]
+    except Exception as e:
+        log.warning("AZQuotes hatasi [%s]: %s" % (philosopher, e))
+    return []
+
+
+def _fetch_goodreads(philosopher):
+    """Goodreads quotes search — HTML parse."""
+    import requests as _req
+    from urllib.parse import quote as _uq
+    try:
+        url = "https://www.goodreads.com/quotes/search?q=%s" % _uq(philosopher)
+        headers = {"User-Agent": "Mozilla/5.0 (compatible; felsefemiz-bot/1.0)"}
+        r = _req.get(url, headers=headers, timeout=12)
+        if r.status_code != 200:
+            return []
+        # <div class="quoteText"> içindeki metni çıkar
+        raw_blocks = _re.findall(r'<div\s+class="quoteText">(.*?)</div>', r.text, _re.DOTALL)
+        quotes = []
+        for block in raw_blocks:
+            # HTML temizle
+            text = _re.sub(r"<[^>]+>", "", block)
+            import html as _html
+            text = _html.unescape(text).strip()
+            # Sadece tırnak içindeki kısmı al (― ile bitmeden önce)
+            lines = [l.strip() for l in text.split("\n") if l.strip()]
+            if lines:
+                quote_text = lines[0].strip('""\u201c\u201d\u2018\u2019').strip()
+                if 25 < len(quote_text) < 400:
+                    quotes.append(quote_text)
+        if quotes:
+            log.info("Goodreads [%s]: %d soz" % (philosopher, len(quotes)))
+        return quotes[:20]
+    except Exception as e:
+        log.warning("Goodreads hatasi [%s]: %s" % (philosopher, e))
+    return []
+
+
+def _fetch_felsefe_gen_tr(philosopher):
+    """felsefe.gen.tr — Türkçe felsefe sitesi."""
+    import requests as _req
+    from urllib.parse import quote as _uq
+    try:
+        url = "https://felsefe.gen.tr/?s=%s" % _uq(philosopher)
+        headers = {"User-Agent": "Mozilla/5.0 (compatible; felsefemiz-bot/1.0)"}
+        r = _req.get(url, headers=headers, timeout=10)
+        if r.status_code != 200:
+            return []
+        # <blockquote> veya <p> içindeki felsefi sözleri çek
+        quotes = _re.findall(r'<blockquote[^>]*>(.*?)</blockquote>', r.text, _re.DOTALL)
+        result = []
+        import html as _html
+        for q in quotes:
+            text = _re.sub(r"<[^>]+>", "", q)
+            text = _html.unescape(text).strip()
+            if 25 < len(text) < 400:
+                result.append(text)
+        if result:
+            log.info("felsefe.gen.tr [%s]: %d soz" % (philosopher, len(result)))
+        return result[:15]
+    except Exception as e:
+        log.warning("felsefe.gen.tr hatasi [%s]: %s" % (philosopher, e))
+    return []
+
+
+def _fetch_real_quotes_from_wikipedia(philosopher):
+    """
+    Çok kaynaklı söz toplama sistemi.
+    Sıra: Wikiquote TR/EN → AZQuotes → Goodreads → felsefe.gen.tr
+    İlk sonuç veren kaynaktan döner.
+    """
+    # 1. Wikiquote (en güvenilir)
+    quotes = _fetch_wikiquote(philosopher)
+    if quotes:
+        return quotes, "wikiquote"
+
+    # 2. AZQuotes
+    quotes = _fetch_azquotes(philosopher)
+    if quotes:
+        return quotes, "azquotes"
+
+    # 3. Goodreads
+    quotes = _fetch_goodreads(philosopher)
+    if quotes:
+        return quotes, "goodreads"
+
+    # 4. felsefe.gen.tr
+    quotes = _fetch_felsefe_gen_tr(philosopher)
+    if quotes:
+        return quotes, "felsefe.gen.tr"
+
+    log.warning("Hicbir kaynakta soz bulunamadi: %s" % philosopher)
+    return [], "none"
 
 def _select_best_quote(philosopher, akim, konu, quotes_list):
     """
-    Wikiquote'tan gelen GERCEK sozler arasinda Claude en uygununu SECER.
-    Claude soz UYDURMAZ — sadece listeden secer ve Turkce formatlar.
+    Cok kaynaktan gelen GERCEK sozler arasinda Claude en uygununu SECER.
+    Ingilizce ise Turkce'ye cevirir, anlamini degistirmez.
     """
     quotes_text = "\n".join(["  %d. %s" % (i+1, q) for i, q in enumerate(quotes_list)])
 
     system = """Sen bir felsefe editorusun. Sana filozofun GERCEK, dogrulanmis sozleri verilecek.
-Gorev: Bu listeden konuya EN UYGUN sozi sec, Turkce'ye cevir (zaten Turkce ise olduğu gibi birak) ve formatla.
+Gorev: Bu listeden konuya EN UYGUN ve EN GUCLU sozi sec, gerekirse Turkce'ye cevir, formatla.
 
 KESIN KURALLAR:
-1. Listede OLMAYAN hicbir soz yazma. Sadece verilen listeden sec.
-2. Secilen sozi sadece gerekirse Turkce'ye cevir. Anlamini DEGISTIRME.
-3. SOZ alaninda tirnak isareti kullanma.
-4. Hashtagleri # ile baslat, Turkce karakter kullanma (o,u,s,c,i,g).
+1. Listede OLMAYAN hicbir soz yazma veya uydurma. Sadece verilen listeden sec.
+2. Ingilizce sozleri akici Turkce'ye cevir — anlami DEGISTIRME, sadece cevir.
+3. Zaten Turkce ise oldugu gibi birak.
+4. SOZ alaninda tirnak isareti (\", \', \u201c, \u201d) KULLANMA.
+5. Hashtagleri # ile baslat, Turkce karakter KULLANMA (o,u,s,c,i,g seklinde yaz).
+6. TWITTER alaninda sadece soz ve yazar olsun, hashtag YAZMA.
 
 Yanitini TAM OLARAK bu formatta ver:
 
 SOZ:
-[Secilen sozun Turkce hali — tirnak YOK]
+[Secilen sozun Turkce hali — tirnak YOK, max 250 karakter]
 ---
 YAZAR:
 [Filozofun adi]
@@ -712,18 +819,18 @@ AKIM:
 [Felsefi akim]
 ---
 HASHTAG:
-[5 hashtag — #Felsefe ve #Bilgelik zorunlu, 3 tane daha]
+[5 hashtag — #Felsefe ve #Bilgelik zorunlu, 3 tane daha konuya uygun]
 ---
 ACIKLAMA:
-[Sozun 1-2 cumlelik Turkce aciklamasi]
+[Sozun 2-3 cumlelik Turkce aciklamasi — felsefi baglamini anlat]
 ---
 TWITTER:
-[Soz tirnaksiz, iki satir bosluk, uzun tire ve yazar adi]"""
+[Soz tirnaksiz — Yazar Adi]"""
 
     msg = client.messages.create(
         model="claude-sonnet-4-20250514",
-        max_tokens=600,
+        max_tokens=700,
         system=system,
-        messages=[{"role": "user", "content": "Dusunur: %s\nAkim: %s\nKonu: %s\n\nGERCEK sozler listesi:\n%s" % (philosopher, akim, konu, quotes_text)}]
+        messages=[{"role": "user", "content": "Dusunur: %s\nAkim: %s\nKonu: %s\n\nGERCEK sozler listesi (bu listeden sec):\n%s" % (philosopher, akim, konu, quotes_text)}]
     )
     return msg.content[0].text.strip()
