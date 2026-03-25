@@ -1,4 +1,4 @@
-import os, logging, requests, re
+import os, logging, requests, re, time
 from pathlib import Path
 from urllib.parse import quote as urlquote
 
@@ -60,6 +60,7 @@ def _upload_image(image_path, alt_text="", title="", caption="", description="")
             else:
                 log.info("Gorsel meta guncellendi: media_id=%s" % media_id)
 
+        time.sleep(0.5)  # WP media API rate limit önlemi
         return media_id
     except Exception as e:
         log.error("_upload_image hatasi: %s" % e, exc_info=True)
@@ -479,6 +480,9 @@ def post_to_wordpress(quote_data, post_img):
     log.info("Etiketler hazirlaniyor...")
     tag_ids = _prepare_tags(quote_data)
 
+    # Adımlar arası kısa bekleme — WP API rate limit önlemi
+    time.sleep(1)
+
     # 5. Post görseli yükle (1080x1350 söz görseli)
     log.info("Post gorseli yukleniyor: %s" % post_img)
     soz_k    = soz[:80] + ("..." if len(soz) > 80 else "")
@@ -493,6 +497,8 @@ def post_to_wordpress(quote_data, post_img):
         log.info("Post gorseli yuklendi: media_id=%s" % media_id)
     else:
         log.warning("Post gorseli yuklenemedi, devam ediliyor.")
+
+    time.sleep(0.5)
 
     # 6. Başlık & içerik
     title   = _build_title(quote_data)
