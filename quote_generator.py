@@ -1,5 +1,7 @@
-import os, re, random, anthropic
+import os, re, random, anthropic, logging
 from datetime import datetime
+
+log = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Atatürk — Sadece doğrulanmış, kaynaklarda belgelenmiş sözler
