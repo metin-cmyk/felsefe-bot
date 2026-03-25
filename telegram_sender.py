@@ -90,10 +90,11 @@ def send_for_approval(post_img, story_img, quote_data):
     except Exception as e:
         log.error("Gorsel gonderilemedi: %s" % e)
 
-    # Önizleme metni
-    twitter_text = quote_data.get("twitter") or quote_data["quote"]
-    hashtags     = quote_data.get("hashtags", "")
-    preview      = twitter_text[:280]
+    # Önizleme metni — söz + yazar, hashtag TEK seferde altta
+    soz    = quote_data.get("quote", "")
+    yazar  = quote_data.get("author", "")
+    hashtags = quote_data.get("hashtags", "")
+    preview = "%s\n\n— %s" % (soz, yazar)
     if hashtags:
         preview += "\n\n" + hashtags
 
