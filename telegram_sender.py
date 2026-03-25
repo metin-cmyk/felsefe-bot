@@ -1,4 +1,3 @@
-# telegram_sender.py
 import os, json, logging, threading, requests, time
 from pathlib import Path
 
@@ -205,8 +204,8 @@ def _do_delete(key, cb_id):
 
 def _process_single_generation():
     try:
-        from bot import produce_and_enqueue
-        ok = produce_and_enqueue()
+        import __main__ as bot
+        ok = bot.produce_and_enqueue()
         if not ok:
             _send_msg("⚠️ Gerçek söz bulunamadı. /yeni ile tekrar deneyin.")
     except Exception as e:
@@ -272,11 +271,11 @@ def _poll():
                         if 1 <= count <= 20:
                             _send_msg("⏳ %d içerik sırayla üretilecek ve yayınlanacak..." % count)
                             def _gen_multi(c):
-                                from bot import produce_and_enqueue
+                                import __main__ as bot
                                 _send_msg("⏳ %d içerik sırayla üretilip yayınlanacak." % c)
                                 basarisiz = 0
                                 for i in range(c):
-                                    ok = produce_and_enqueue()
+                                    ok = bot.produce_and_enqueue()
                                     if not ok:
                                         basarisiz += 1
                                     time.sleep(5)  # üretimler arası bekleme
@@ -302,7 +301,7 @@ def _poll():
                     _send_msg("⏳ Yeni içerik hazırlanıyor, lütfen bekleyin...")
                     threading.Thread(target=_process_single_generation, daemon=True).start()
                 elif tlow == "/durum":
-                    from bot import _publish_queue
+                    import __main__ as bot
                     posted_file = Path("posted.json")
                     count = 0
                     if posted_file.exists():
@@ -310,7 +309,7 @@ def _poll():
                             count = len(json.loads(posted_file.read_text(encoding="utf-8")))
                         except Exception:
                             pass
-                    q_size = _publish_queue.qsize()
+                    q_size = bot._publish_queue.qsize()
                     _send_msg(
                         "✅ Bot çalışıyor!\n"
                         "📊 Toplam yayınlanan: %d\n"
