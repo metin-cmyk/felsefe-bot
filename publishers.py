@@ -1,7 +1,7 @@
-# publishers.py
 import os, logging, requests, re, time
 from pathlib import Path
 from urllib.parse import quote as urlquote
+from image_generator import create_square_cover
 
 log = logging.getLogger(__name__)
 
@@ -214,7 +214,7 @@ def _create_filozof(name, wiki_raw, wiki_lang):
     tarihler = _extract_dates(wiki_raw)
 
     # Kapak görseli: özel 1080x1080, sadece isim
-    cover_path = _make_cover_image(name)
+    cover_path = create_square_cover(name)
     cover_id   = None
     if cover_path:
         cover_id = _upload_image(
@@ -263,7 +263,7 @@ def _update_filozof(term_id, name, wiki_raw, wiki_lang):
     """Mevcut filozofun eksik alanlarını günceller."""
     bio      = _build_bio(name, wiki_raw, wiki_lang)
     tarihler = _extract_dates(wiki_raw)
-    cover_path = _make_cover_image(name)
+    cover_path = create_square_cover(name)
     cover_id   = None
     if cover_path:
         cover_id = _upload_image(
