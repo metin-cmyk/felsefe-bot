@@ -173,6 +173,38 @@ def _build_bio(name, wiki_raw, wiki_lang):
     return bio or wiki_raw[:600]
 
 
+
+def _ensure_filozof(name, wiki_raw, wiki_lang):
+    """
+    Filozof taxonomy term'ini bul veya oluştur.
+    Mevcut + tamam → ID döndür
+    Mevcut + eksik → _update_filozof çağır
+    Yok            → _create_filozof çağır
+    """
+    try:
+        r = requests.get(
+            "%s/wp-json/wp/v2/filozof" % WP_URL,
+            auth=(WP_USER, WP_APP_PASS),
+            params={"search": name, "per_page": 10},
+            timeout=15,
+        )
+        if r.status_code == 200:
+            for term in r.json():
+                if term["name"].lower() == name.lower():
+                    acf      = term.get("acf", {})
+                    bio_ok   = bool(acf.get("kisa_biyografi", "").strip())
+                    cover_ok = bool(acf.get("filozof_kapak_resmi", ""))
+                    if bio_ok and cover_ok:
+                        log.info("Filozof tamam: %s (id=%s)" % (name, term["id"]))
+                        return term["id"]
+                    else:
+                        log.info("Filozof eksik alanlari guncelleniyor: %s" % name)
+                        return _update_filozof(term["id"], name, wiki_raw, wiki_lang)
+    except Exception as e:
+        log.warning("Filozof arama hatasi: %s" % e)
+
+    return _create_filozof(name, wiki_raw, wiki_lang)
+
 def _create_filozof(name, wiki_raw, wiki_lang):
     """Yeni filozof taxonomy term oluşturur."""
     log.info("Yeni filozof olusturuluyor: %s" % name)
