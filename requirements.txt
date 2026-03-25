@@ -4,3 +4,8 @@ requests>=2.31.0
 Pillow>=10.0.0
 numpy>=1.24.0
 tweepy>=4.14.0
+flask
+schedule
+requests
+Pillow
+anthropic
