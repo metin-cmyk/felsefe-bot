@@ -164,7 +164,7 @@ def _make_image(size, quote_data, palette):
         return f, lh, lns
 
     # Font boyutunu kademeli küçült — güvenli alana sığana kadar
-    for font_size in (70, 62, 54, 46, 38, 30):
+    for font_size in (66, 58, 50, 42, 34, 28):
         f_q, lh, lines = _wrap_text(font_size)
         total_h = len(lines) * lh
         if total_h <= max_quote_h:
@@ -185,22 +185,22 @@ def _make_image(size, quote_data, palette):
     draw.rectangle([(w//2)-70, line_y, (w//2)+70, line_y+2], fill=accent)
 
     # Yazar
-    f_author    = _font(44, "italic")
+    f_author    = _font(40, "italic")
     author_text = "— %s" % author
     bbox        = draw.textbbox((0,0), author_text, font=f_author)
     aw          = bbox[2] - bbox[0]
     draw.text(((w-aw)//2, line_y+22), author_text, font=f_author, fill=accent)
 
     # Akım
-    f_akim = _font(28, "regular")
+    f_akim = _font(24, "regular")
     bbox   = draw.textbbox((0,0), akim, font=f_akim)
     aw2    = bbox[2] - bbox[0]
     draw.text(((w-aw2)//2, line_y+96), akim, font=f_akim, fill=sub_color)
 
     # Filigran — "felsefemiz" Montserrat Bold + ".net" Montserrat Regular
     handle_y    = int(h * 0.87)
-    f_hbold     = _montserrat(34, "bold")
-    f_hreg      = _montserrat(34, "regular")
+    f_hbold     = _montserrat(30, "bold")
+    f_hreg      = _montserrat(30, "regular")
     bbox_bold   = draw.textbbox((0,0), SITE_HANDLE_BOLD, font=f_hbold)
     bbox_reg    = draw.textbbox((0,0), SITE_HANDLE_REGULAR, font=f_hreg)
     w_bold      = bbox_bold[2] - bbox_bold[0]
@@ -247,22 +247,52 @@ def create_square_cover(title, subtitle=""):
         bg_color   = _hex(palette["bg"])
         text_color = _hex(palette["text"])
 
-    img = Image.new("RGB", (w, h), bg_color)
+    img  = Image.new("RGB", (w, h), bg_color)
     draw = ImageDraw.Draw(img)
 
     words = title.strip().split()
-    if not words: words = ["Anonim"]
-    
+    if not words:
+        words = ["Anonim"]
+
+    margin   = 100           # sol/sağ güvenli alan
+    usable_w = w - margin*2  # 880px
+
+    # Her kelimeyi ayrı satıra yaz.
+    # Font boyutunu kelime sayısı + en uzun kelimenin uzunluğuna göre belirle:
+    # Başlangıç boyutu küçük tutuldu (eski: 180), dinamik olarak büyütülebilir.
     count = len(words)
-    f_size = 180 if count <= 2 else (150 if count == 3 else 120)
+
+    # Başlangıç font boyutları — öncekinden çok daha küçük
+    if count == 1:
+        start_size = 100
+    elif count == 2:
+        start_size = 90
+    elif count == 3:
+        start_size = 80
+    else:
+        start_size = 70
+
+    # En uzun kelimeye göre sığmıyorsa küçült
+    f_size = start_size
+    while f_size >= 30:
+        f_title = _font(f_size, "bold")
+        max_word_w = max(
+            draw.textbbox((0,0), word, font=f_title)[2]
+            for word in words
+        )
+        if max_word_w <= usable_w:
+            break
+        f_size -= 6
+
     f_title = _font(f_size, "bold")
-    
-    line_h = f_size * 1.2
-    y = (h - (count * line_h)) // 2
+    line_h  = int(f_size * 1.35)
+    total_h = count * line_h
+    y       = (h - total_h) // 2
 
     for word in words:
         bbox = draw.textbbox((0, 0), word, font=f_title)
-        draw.text(((w - (bbox[2] - bbox[0]))//2, y), word, font=f_title, fill=text_color)
+        x    = (w - (bbox[2] - bbox[0])) // 2
+        draw.text((x, y), word, font=f_title, fill=text_color)
         y += line_h
 
     safe_name = re.sub(r"[^a-z0-9]", "_", title.lower())
