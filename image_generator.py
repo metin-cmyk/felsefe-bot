@@ -97,14 +97,14 @@ def _font(size, style="bold"):
 def _make_image(size, quote_data, palette):
     w, h = size
     
-    # --- ATATÜRK KONTROLÜ (Söz Paylaşımları İçin) ---
+    # --- ATATÜRK ÖZEL MODU ---
     is_ataturk = "atatürk" in quote_data.get("author", "").lower()
     
     if is_ataturk:
-        bg_color   = (0, 0, 0)       # Siyah zemin
-        text_color = (255, 255, 255) # Beyaz yazı
-        accent     = (255, 255, 255) # Beyaz ayraç
-        sub_color  = (200, 200, 200) # Gri alt yazı
+        bg_color   = (0, 0, 0)
+        text_color = (255, 255, 255)
+        accent     = (255, 255, 255)
+        sub_color  = (200, 200, 200)
     else:
         bg_color   = _hex(palette["bg"])
         text_color = _hex(palette["text"])
@@ -207,13 +207,13 @@ def create_story_image(quote_data, palette):
 
 def create_square_cover(title, subtitle=""):
     """
-    Filozof Kapak Gorseli: Ismi dikey yazar (Mustafa / Kemal / Ataturk gibi).
-    Atatürk ise zemini siyah, ismi beyaz yapar ve filigrani kaldirir.
+    Filozof Kapak Gorseli: Ismi dikey yazar. 
+    Atatürk ise Siyah/Beyaz yapar ve filigrani kaldirir.
     """
     palette = random.choice(PALETTES)
     w, h = 1080, 1080
     
-    # --- ATATÜRK KONTROLÜ (Kapak Görselleri İçin) ---
+    # --- ATATÜRK KONTROLÜ ---
     if "atatürk" in title.lower():
         bg_color   = (0, 0, 0)
         text_color = (255, 255, 255)
@@ -224,7 +224,6 @@ def create_square_cover(title, subtitle=""):
     img = Image.new("RGB", (w, h), bg_color)
     draw = ImageDraw.Draw(img)
 
-    # İsimleri kelime kelime böl
     words = title.strip().split()
     if not words: words = ["Anonim"]
     
