@@ -1,3 +1,4 @@
+# publishers.py
 import os, logging, requests, re, time
 from pathlib import Path
 from urllib.parse import quote as urlquote
@@ -389,15 +390,12 @@ def _prepare_tags(quote_data):
 # ---------------------------------------------------------------------------
 
 def _build_title(quote_data):
-    soz   = quote_data.get("quote", "")
-    yazar = quote_data.get("author", "Anonim")
-    if len(soz) > 50:
-        t  = soz[:50]
+    soz = quote_data.get("quote", "").strip()
+    if len(soz) > 80:
+        t = soz[:80]
         ls = t.rfind(" ")
-        soz = (t[:ls] if ls > 30 else t).rstrip(",.;:") + "..."
-    else:
-        soz = soz.rstrip(",.;:")
-    return "%s — %s" % (soz, yazar)
+        return (t[:ls] if ls > 50 else t).rstrip(",.;:") + "..."
+    return soz.rstrip(",.;:")
 
 
 # ---------------------------------------------------------------------------
