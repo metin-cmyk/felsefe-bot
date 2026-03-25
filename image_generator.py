@@ -97,7 +97,7 @@ def _font(size, style="bold"):
 def _make_image(size, quote_data, palette):
     w, h = size
     
-    # --- ATATÜRK ÖZEL MODU ---
+    # --- ATATÜRK KONTROLÜ ---
     is_ataturk = "atatürk" in quote_data.get("author", "").lower()
     
     if is_ataturk:
@@ -207,13 +207,12 @@ def create_story_image(quote_data, palette):
 
 def create_square_cover(title, subtitle=""):
     """
-    Filozof Kapak Gorseli: Ismi dikey yazar. 
-    Atatürk ise Siyah/Beyaz yapar ve filigrani kaldirir.
+    Filozof Kapak: Ismi dikey yazar. 
+    Atatürk ise Siyah/Beyaz yapar ve filigran yoktur.
     """
     palette = random.choice(PALETTES)
     w, h = 1080, 1080
     
-    # --- ATATÜRK KONTROLÜ ---
     if "atatürk" in title.lower():
         bg_color   = (0, 0, 0)
         text_color = (255, 255, 255)
