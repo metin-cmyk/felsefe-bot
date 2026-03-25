@@ -22,15 +22,14 @@ def _wp_upload_image(image_path):
     return r.json()["id"]
 
 def _generate_philosopher_info(term_name):
-    """Claude'dan detaylı biyografi alır. Donmayı önlemek için içeride import edilir."""
+    """Donmayı önlemek için quote_generator içeride import edilir."""
     try:
-        # Circular import (donma) hatasını önlemek için fonksiyon içinde import
         import quote_generator
         client = quote_generator.client
         
-        prompt = (f"{term_name} kimdir? Bu düşünürün felsefesini, hayatını ve en önemli eserlerini "
-                  f"anlatan profesyonel, ansiklopedik bir yazı yaz. En az 3 paragraf olsun. "
-                  f"Format kesinlikle şu olsun:\nTARIH: [Doğum ve Ölüm Yılı]\nBIYO: [Detaylı Biyografi Metni]")
+        prompt = (f"{term_name} kimdir? Bu düşünürün felsefesini ve hayatını anlatan "
+                  f"profesyonel bir yazı yaz. En az 3 paragraf olsun. "
+                  f"Format kesinlikle şu olsun:\nTARIH: [Tarihler]\nBIYO: [Metin]")
         
         msg = client.messages.create(
             model="claude-3-5-sonnet-20240620",
@@ -45,11 +44,10 @@ def _generate_philosopher_info(term_name):
         
         return tarih, biyo
     except Exception as e:
-        log.error(f"AI Bilgi üretme hatası: {e}")
-        return "Bilinmiyor", f"{term_name} üzerine felsefi bir inceleme."
+        log.error(f"AI Bilgi hatası: {e}")
+        return "Bilinmiyor", f"{term_name} üzerine felsefi inceleme."
 
 def _ensure_term_with_cover(taxonomy_slug, term_name, subtitle_text):
-    """Terim (Filozof/Akım) yoksa görsel ve AI bilgisiyle oluşturur."""
     if not WP_APP_PASS or not term_name: return None
     search_url = f"{WP_URL}/wp-json/wp/v2/{taxonomy_slug}?search={term_name}"
     try:
@@ -58,30 +56,20 @@ def _ensure_term_with_cover(taxonomy_slug, term_name, subtitle_text):
             for term in r.json():
                 if term["name"].lower() == term_name.lower(): return term["id"]
 
-        log.info(f"Yeni {taxonomy_slug} saptandı: {term_name}. İçerik hazırlanıyor...")
         from image_generator import create_square_cover
         cover_path = create_square_cover(term_name, subtitle=subtitle_text)
         media_id = _wp_upload_image(cover_path)
         
-        tarih, biyo = "", ""
-        if taxonomy_slug == "filozof":
-            tarih, biyo = _generate_philosopher_info(term_name)
-        else:
-            biyo = f"{term_name} akımı üzerine kapsamlı felsefi inceleme."
+        tarih, biyo = ("", "") if taxonomy_slug != "filozof" else _generate_philosopher_info(term_name)
+        if taxonomy_slug != "filozof": biyo = f"{term_name} akımı incelemesi."
 
         payload = {
-            "name": term_name,
-            "description": biyo,
-            "acf": {
-                "filozof_kapak_resmi": media_id,
-                "yasam_tarihleri": tarih,
-                "kisa_biyografi": biyo
-            }
+            "name": term_name, "description": biyo,
+            "acf": {"filozof_kapak_resmi": media_id, "yasam_tarihleri": tarih, "kisa_biyografi": biyo}
         }
         r_create = requests.post(f"{WP_URL}/wp-json/wp/v2/{taxonomy_slug}", auth=(WP_USER, WP_APP_PASS), json=payload, timeout=30)
-        if r_create.status_code == 201: return r_create.json()["id"]
-    except Exception as e: log.error(f"Taksonomi hatası: {e}")
-    return None
+        return r_create.json()["id"] if r_create.status_code == 201 else None
+    except Exception as e: log.error(f"Taksonomi hatası: {e}"); return None
 
 def _get_or_create_wp_tag(tag_name):
     if not WP_APP_PASS or not tag_name: return None
@@ -91,50 +79,35 @@ def _get_or_create_wp_tag(tag_name):
             for tag in r.json():
                 if tag["name"].lower() == tag_name.lower(): return tag["id"]
         r_create = requests.post(f"{WP_URL}/wp-json/wp/v2/tags", auth=(WP_USER, WP_APP_PASS), json={"name": tag_name}, timeout=30)
-        if r_create.status_code == 201: return r_create.json()["id"]
-    except Exception: pass
-    return None
+        return r_create.json()["id"] if r_create.status_code == 201 else None
+    except Exception: return None
 
 def post_to_wordpress(quote_data, post_img):
-    """Ana paylaşım fonksiyonu. Sadece WordPress'e gönderir."""
+    """Ana paylaşım fonksiyonu."""
     if not WP_APP_PASS: return None
     akim = quote_data.get("akim", "Genel felsefe")
     yazar = quote_data.get("author", "Anonim")
-    title = f"{yazar} - {akim} Sözleri"
-
-    # Terimleri kontrol et veya oluştur
-    cat_id = _ensure_term_with_cover("categories", akim, "Felsefi Akımlar")
-    filozof_id = _ensure_term_with_cover("filozof", yazar, "Tarihe Yön Veren Düşünürler")
-
-    # Etiketleri oluştur
-    raw_hashtags = quote_data.get("hashtags", "").split()
-    tag_ids = [t for t in [_get_or_create_wp_tag(rt.replace("#", "").strip()) for rt in raw_hashtags] if t]
     
-    # Görseli yükle
+    cat_id = _ensure_term_with_cover("categories", akim, "Felsefi Akımlar")
+    filozof_id = _ensure_term_with_cover("filozof", yazar, "Düşünürler")
+    tag_ids = [t for t in [_get_or_create_wp_tag(rt.replace("#", "").strip()) for rt in quote_data.get("hashtags", "").split()] if t]
+    
     media_id = None
     try: media_id = _wp_upload_image(post_img)
-    except Exception as e: log.error(f"Post görseli yüklenemedi: {e}")
+    except Exception: pass
 
-    # Yazıyı oluştur
     post_data = {
-        "title": title,
-        "content": "",
-        "status": "publish",
-        "categories": [cat_id] if cat_id else [],
-        "filozof": [filozof_id] if filozof_id else [],
-        "tags": tag_ids,
+        "title": f"{yazar} - {akim} Sözleri", "content": "", "status": "publish",
+        "categories": [cat_id] if cat_id else [], "filozof": [filozof_id] if filozof_id else [], "tags": tag_ids,
         "acf": {
-            "felsefi_soz": quote_data["quote"],
-            "yazar": yazar,
-            "felsefi_akim": akim,
-            "aciklama": quote_data.get("aciklama", ""),
-            "twitter_text": quote_data.get("twitter", "")
+            "felsefi_soz": quote_data["quote"], "yazar": yazar, "felsefi_akim": akim,
+            "aciklama": quote_data.get("aciklama", ""), "twitter_text": quote_data.get("twitter", "")
         }
     }
     if media_id: post_data["featured_media"] = media_id
-
     r = requests.post(f"{WP_URL}/wp-json/wp/v2/posts", auth=(WP_USER, WP_APP_PASS), json=post_data, timeout=30)
-    
-    link = r.json().get("link", "")
-    log.info(f"Site paylaşıldı: {link}")
-    return link
+    return r.json().get("link", "")
+
+def publish_all(quote_data, post_img, story_img):
+    """bot.py'ın ImportError vermemesi için bu fonksiyonu burada tutuyoruz."""
+    return post_to_wordpress(quote_data, post_img)
