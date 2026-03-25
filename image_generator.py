@@ -109,6 +109,7 @@ def _make_image(size, quote_data, palette):
     akim   = quote_data.get("akim", "")
 
     quoted_text = "\u201c%s\u201d" % quote
+
     margin    = 110
     usable_w  = w - (margin * 2)
 
@@ -197,22 +198,24 @@ def create_story_image(quote_data, palette):
 
 def create_square_cover(title, subtitle=""):
     """
-    Filozof Kapak Gorseli: Ismi dikey yazar (alt alta), 
-    filigrani (site adini) ve cerceveyi kaldirir.
+    Filozoflar/Kategoriler icin profil kapagi.
+    Ismi kelime kelime boler ve dikey yazar.
+    Filigran (felsefemiz.net) ve cerceve kaldirilmistir.
     """
     palette = random.choice(PALETTES)
     w, h = 1080, 1080
+
     bg_color   = _hex(palette["bg"])
     text_color = _hex(palette["text"])
 
     img = Image.new("RGB", (w, h), bg_color)
     draw = ImageDraw.Draw(img)
 
-    # Ismi kelime kelime bol
+    # Ismi kelime kelime bol (Mustafa / Kemal / Ataturk)
     words = title.strip().split()
     if not words: words = ["Anonim"]
     
-    # Dinamik font boyutu (Kelime sayisina gore)
+    # Kelime sayisina gore dinamik font boyutu
     count = len(words)
     if count <= 2: f_size = 180
     elif count == 3: f_size = 150
@@ -220,21 +223,23 @@ def create_square_cover(title, subtitle=""):
     
     f_title = _font(f_size, "bold")
     
-    # Dikey ortalama hesabi
-    line_h = f_size * 1.2
-    total_text_h = count * line_h
-    y = (h - total_text_h) // 2
+    # Toplam metin yuksekligini hesapla (dikeyde ortalamak icin)
+    line_h = f_size * 1.15
+    total_h = count * line_h
+    current_y = (h - total_h) // 2
 
+    # Kelimeleri Tek Tek Alt Alta Yaz
     for word in words:
         bbox = draw.textbbox((0, 0), word, font=f_title)
         tw = bbox[2] - bbox[0]
-        draw.text(((w - tw)//2, y), word, font=f_title, fill=text_color)
-        y += line_h
+        draw.text(((w - tw)//2, current_y), word, font=f_title, fill=text_color)
+        current_y += line_h
 
-    # --- SITE_HANDLE (felsefemiz.net) VE CERCEVE KALDIRILDI ---
+    # --- felsefemiz.net VE CERCEVE BURADAN KALDIRILDI ---
 
     safe_name = re.sub(r"[^a-z0-9]", "_", title.lower())
     filename = "cover_%s_%d.jpg" % (safe_name[:20], int(time.time()))
     filepath = OUTPUT_DIR / filename
     img.save(str(filepath), "JPEG", quality=95)
+    
     return str(filepath)
