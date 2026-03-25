@@ -36,8 +36,18 @@ def run():
     log.info("--- Yeni icerik uretim sureci basladi ---")
 
     try:
-        # 1. Söz üret
+        # 1. Söz üret — Wikiquote'tan gercek soz bulunamazsa None doner
         quote_data = generate_quote()
+
+        if quote_data is None:
+            log.warning("Gercek soz bulunamadi, icerik atlaniyor.")
+            try:
+                from telegram_sender import _send_msg
+                _send_msg("⚠️ Bu sefer Wikiquote'tan gerçek söz bulunamadı. İçerik atlandı, bir sonraki saatte tekrar denenecek.")
+            except:
+                pass
+            return
+
         log.info("Soz uretildi: %s" % quote_data["quote"][:50])
 
         # 2. Görselleri hazırla

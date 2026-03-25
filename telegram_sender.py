@@ -192,6 +192,9 @@ def _process_single_generation():
     from quote_generator import generate_quote
     from image_generator import create_post_image, create_story_image
     qd = generate_quote()
+    if qd is None:
+        _send_msg("⚠️ Wikiquote'tan gerçek söz bulunamadı. Lütfen /yeni ile tekrar deneyin.")
+        return
     pi, pal = create_post_image(qd)
     si = create_story_image(qd, pal)
     send_for_approval(pi, si, qd)

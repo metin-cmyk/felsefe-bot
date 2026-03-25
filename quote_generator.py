@@ -541,16 +541,28 @@ def generate_quote():
         konu = random.choice(KONULAR)
 
     # Wikiquote'tan gercek sozleri cek — Claude soz UYDURMUYOR
-    real_quotes, lang = _fetch_real_quotes_from_wikipedia(filozof)
+    # Gercek soz bulunamazsa baska filozof denenecek, uydurma asla yok
+    MAX_DENEME = 5
+    for deneme in range(MAX_DENEME):
+        real_quotes, lang = _fetch_real_quotes_from_wikipedia(filozof)
 
-    if real_quotes:
-        # Gercek sozler bulundu — Claude sadece secer ve formatlar
-        raw = _select_best_quote(filozof, akim, konu, real_quotes)
-    else:
-        # Gercek soz bulunamadi — ilhamla uret, ~ ile isaretli
-        raw = _fallback_inspired(filozof, akim, konu)
+        if real_quotes:
+            # Gercek sozler bulundu — Claude sadece secer ve formatlar
+            raw = _select_best_quote(filozof, akim, konu, real_quotes)
+            return _parse(raw, filozof, akim)
 
-    return _parse(raw, filozof, akim)
+        # Bu filozof icin soz bulunamadi — baska birini dene
+        log.warning("Wikiquote'ta soz bulunamadi: %s — baska filozof deneniyor (%d/%d)" % (filozof, deneme+1, MAX_DENEME))
+        akim = random.choice(AKIMLAR)
+        if akim in FILOZOFLAR and FILOZOFLAR[akim]:
+            filozof = random.choice(FILOZOFLAR[akim])
+        else:
+            filozof = random.choice(FILOZOFLAR.get("Antik Yunan Felsefesi", ["Sokrates"]))
+        konu = random.choice(KONULAR)
+
+    # 5 denemede de bulunamazsa None don — bot.py bu durumu handle eder
+    log.error("5 denemede de Wikiquote'tan gercek soz bulunamadi! Icerik uretimi atlaniyor.")
+    return None
 
 def _clean_quotes(text):
     text = text.strip()
