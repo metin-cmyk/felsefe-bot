@@ -205,7 +205,6 @@ def _do_delete(key, cb_id):
 def _process_single_generation():
     try:
         from bot import produce_and_enqueue
-        _send_msg("🔄 Üretiliyor, kuyruğa ekleniyor...")
         ok = produce_and_enqueue()
         if not ok:
             _send_msg("⚠️ Gerçek söz bulunamadı. /yeni ile tekrar deneyin.")
@@ -271,15 +270,15 @@ def _poll():
                         if 1 <= count <= 20:
                             _send_msg("⏳ %d içerik sırayla üretilecek ve yayınlanacak..." % count)
                             def _gen_multi(c):
+                                from bot import produce_and_enqueue
+                                _send_msg("⏳ %d içerik sırayla üretilip yayınlanacak." % c)
+                                basarisiz = 0
                                 for i in range(c):
-                                    _send_msg("🔄 %d/%d üretiliyor..." % (i+1, c))
-                                    from bot import produce_and_enqueue
                                     ok = produce_and_enqueue()
                                     if not ok:
-                                        _send_msg("⚠️ %d/%d: söz bulunamadı, atlandı." % (i+1, c))
-                                    if i < c - 1:
-                                        time.sleep(4)
-                                _send_msg("✅ %d içerik kuyruğa eklendi, sırayla yayınlanacak." % c)
+                                        basarisiz += 1
+                                    time.sleep(5)  # üretimler arası bekleme
+                                _send_msg("✅ %d/%d içerik kuyruğa eklendi, sırayla yayınlanacak." % (c - basarisiz, c))
                             threading.Thread(target=_gen_multi, args=(count,), daemon=True).start()
                         else:
                             _send_msg("❌ 1 ile 20 arasında bir sayı girin.")
