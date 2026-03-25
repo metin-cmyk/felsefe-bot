@@ -137,40 +137,38 @@ def _make_image(size, quote_data, palette):
     akim   = quote_data.get("akim", "")
 
     quoted_text = "\u201c%s\u201d" % quote
-    margin    = 110
-    usable_w  = w - (margin * 2)
+    margin   = 110
+    usable_w = w - (margin * 2)
 
-    # --- Yazı Boyutu ve Sarma ---
-    f_q = _font(70, "bold")
-    lh  = 105
+    # Güvenli alan: yazar + akım + handle için alt 280px ayrılıyor
+    # Söz için kullanılabilir yükseklik
+    safe_top    = int(h * 0.12)
+    safe_bottom = int(h * 0.72)
+    max_quote_h = safe_bottom - safe_top
 
-    words   = quoted_text.split()
-    lines   = []
-    current = ""
-    for word in words:
-        test = (current + " " + word).strip()
-        bbox = draw.textbbox((0,0), test, font=f_q)
-        if bbox[2] - bbox[0] > usable_w and current:
-            lines.append(current)
-            current = word
-        else:
-            current = test
-    if current: lines.append(current)
-
-    if len(lines) > 6:
-        f_q = _font(56, "bold")
-        lh  = 88
-        lines = []
-        current = ""
-        for word in words:
-            test = (current + " " + word).strip()
-            bbox = draw.textbbox((0,0), test, font=f_q)
-            if bbox[2] - bbox[0] > usable_w and current:
-                lines.append(current)
-                current = word
+    def _wrap_text(font_size, max_lines=99):
+        """Verilen font boyutunda metni sarar, satır listesi döner."""
+        f = _font(font_size, "bold")
+        lh = int(font_size * 1.45)
+        wrds = quoted_text.split()
+        lns, cur = [], ""
+        for w_ in wrds:
+            test = (cur + " " + w_).strip()
+            bb = draw.textbbox((0,0), test, font=f)
+            if bb[2] - bb[0] > usable_w and cur:
+                lns.append(cur)
+                cur = w_
             else:
-                current = test
-        if current: lines.append(current)
+                cur = test
+        if cur: lns.append(cur)
+        return f, lh, lns
+
+    # Font boyutunu kademeli küçült — güvenli alana sığana kadar
+    for font_size in (70, 62, 54, 46, 38, 30):
+        f_q, lh, lines = _wrap_text(font_size)
+        total_h = len(lines) * lh
+        if total_h <= max_quote_h:
+            break
 
     total_h = len(lines) * lh
     y = int(h * 0.42) - total_h // 2
