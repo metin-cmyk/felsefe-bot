@@ -13,16 +13,20 @@ WP_APP_PASS = os.environ.get("WP_APP_PASS", "")
 # ---------------------------------------------------------------------------
 
 def _fetch_wikipedia_raw(name):
-    """Wikipedia'dan ham özet metnini çeker. Önce TR, sonra EN dener."""
+    """Wikipedia'dan ham özet ve description metnini çeker. Önce TR, sonra EN dener."""
     for lang in ("tr", "en"):
         try:
             url = "https://%s.wikipedia.org/api/rest_v1/page/summary/%s" % (lang, urlquote(name))
             r = requests.get(url, timeout=10)
             if r.status_code == 200:
-                extract = r.json().get("extract", "")
+                data    = r.json()
+                extract = data.get("extract", "")
+                desc    = data.get("description", "")  # Örn: "German philosopher (1889–1951)"
                 if len(extract) > 80:
                     log.info("Wikipedia %s bulundu: %s" % (lang.upper(), name))
-                    return extract[:3000], lang
+                    # description'ı extract'ın başına ekle — tarih çıkarma için
+                    full_text = ("%s\n%s" % (desc, extract)) if desc else extract
+                    return full_text[:3000], lang
         except Exception as e:
             log.warning("Wikipedia %s hatasi (%s): %s" % (lang, name, e))
     return "", "tr"
@@ -91,11 +95,26 @@ def _extract_dates(wiki_raw, name):
     """Wikipedia metninden doğum/ölüm tarihlerini çıkarır."""
     if not wiki_raw:
         return "Bilinmiyor"
-    # Örn: (1844-1900), (MÖ 470 - MÖ 399) gibi kalıpları ara
-    pattern = r"\(([^)]*\d{3,4}[^)]*)\)"
-    matches = re.findall(pattern, wiki_raw[:500])
-    if matches:
-        return matches[0]
+
+    patterns = [
+        # (15 Ekim 1844 – 25 Ağustos 1900) — tam tarihler
+        r"\(([^)]*\d{1,2}\s+\w+\s+\d{3,4}[^)]*[\-–][^)]*\d{3,4}[^)]*)\)",
+        # (MÖ 470 - MÖ 399) — antik dönem
+        r"\(([^)]*MÖ[^)]*\d+[^)]*)\)",
+        # (1889–1951) sadece yıllar — description alanından gelir
+        r"\((\d{4}\s*[\-–]\s*\d{4})\)",
+        # Genel: herhangi bir parantez içinde 3-4 haneli sayı ve tire/dash
+        r"\(([^)]*\d{3,4}[^)]*[\-–][^)]*\d{3,4}[^)]*)\)",
+    ]
+
+    for pattern in patterns:
+        matches = re.findall(pattern, wiki_raw[:600])
+        if matches:
+            # En kısa ve temiz olanı seç
+            best = min(matches, key=len)
+            if len(best) < 80:  # çok uzunsa atla
+                return best.strip()
+
     return "Bilinmiyor"
 
 # ---------------------------------------------------------------------------
@@ -161,8 +180,17 @@ def _ensure_filozof(name, wiki_raw, wiki_lang, cover_img_path=None):
         if r.status_code == 200:
             for term in r.json():
                 if term["name"].lower() == name.lower():
-                    log.info("Filozof taxonomy zaten var: %s (id=%s)" % (name, term["id"]))
-                    return term["id"]
+                    term_id = term["id"]
+                    # ACF alanları boş veya "Bilinmiyor" ise güncelle
+                    acf = term.get("acf", {})
+                    bio_empty = not acf.get("kisa_biyografi", "").strip()
+                    date_empty = acf.get("yasam_tarihleri", "Bilinmiyor") in ("Bilinmiyor", "", None)
+                    cover_empty = not acf.get("filozof_kapak_resmi", "")
+                    if bio_empty or date_empty or cover_empty:
+                        log.info("Filozof taxonomy bulundu ama eksik alanlar var, guncelleniyor: %s" % name)
+                        return None  # Yeniden oluştur
+                    log.info("Filozof taxonomy tamam: %s (id=%s)" % (name, term_id))
+                    return term_id
     except Exception as e:
         log.warning("Filozof arama hatasi: %s" % e)
 
