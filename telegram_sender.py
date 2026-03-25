@@ -1,3 +1,4 @@
+# telegram_sender.py
 import os, json, logging, threading, requests, time
 from pathlib import Path
 
@@ -242,7 +243,8 @@ def _poll():
 
                     elif data.startswith("new_"):
                         _pending.pop(data[4:], None)
-                        _answer_cb(cb_id)
+                        _answer_cb(cb_id, "Üretim başlatıldı...")
+                        _send_msg("⏳ Yeni içerik hazırlanıyor, birazdan gönderilecek...")
                         threading.Thread(target=_process_single_generation, daemon=True).start()
 
                     elif data.startswith("multi_"):
@@ -297,6 +299,7 @@ def _poll():
                         "Her içeriğin altında 🗑 Sil butonu bulunur."
                     )
                 elif tlow == "/yeni":
+                    _send_msg("⏳ Yeni içerik hazırlanıyor, lütfen bekleyin...")
                     threading.Thread(target=_process_single_generation, daemon=True).start()
                 elif tlow == "/durum":
                     from bot import _publish_queue
