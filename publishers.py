@@ -21,6 +21,7 @@ def _fetch_wikipedia_raw(name):
             if r.status_code == 200:
                 extract = r.json().get("extract", "")
                 if len(extract) > 80:
+                    log.info("Wikipedia %s bulundu: %s" % (lang.upper(), name))
                     return extract[:3000], lang
         except Exception as e:
             log.warning("Wikipedia %s hatasi (%s): %s" % (lang, name, e))
@@ -30,14 +31,14 @@ def _fetch_wikipedia_raw(name):
 # Claude ile özgün metin üret
 # ---------------------------------------------------------------------------
 
-def _claude_rewrite(prompt_text):
-    """Anthropic API ile özgün Türkçe paragraf üretir."""
+def _claude_rewrite(prompt_text, max_tokens=800):
+    """Anthropic API ile özgün Türkçe metin üretir."""
     try:
         import anthropic
         client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
         msg = client.messages.create(
             model="claude-sonnet-4-20250514",
-            max_tokens=800,
+            max_tokens=max_tokens,
             messages=[{"role": "user", "content": prompt_text}]
         )
         return msg.content[0].text.strip()
@@ -45,56 +46,74 @@ def _claude_rewrite(prompt_text):
         log.error("Claude rewrite hatasi: %s" % e)
         return ""
 
+# ---------------------------------------------------------------------------
+# Filozof biyografisi (taxonomy için)
+# ---------------------------------------------------------------------------
+
 def _build_philosopher_bio(name, wiki_raw, wiki_lang):
     """
-    Filozofun biyografisini Wikipedia verisini referans alarak
-    Claude'un kendi cümlesiyle yazar.
-    Atatürk için özel kural: sadece doğrulanmış sözlerini kullan.
+    Filozofun biyografisini Wikipedia'yı referans alarak Claude'un
+    kendi cümlesiyle yazar. Atatürk için özel kural geçerli.
     """
-    ataturk_names = ["Mustafa Kemal Atatürk", "Atatürk", "Mustafa Kemal", "M. Kemal Atatürk"]
-    is_ataturk = any(n.lower() in name.lower() for n in ataturk_names)
+    ataturk_names = ["mustafa kemal atatürk", "atatürk", "mustafa kemal", "m. kemal atatürk"]
+    is_ataturk = any(n in name.lower() for n in ataturk_names)
 
     if is_ataturk:
         prompt = (
-            "Mustafa Kemal Atatürk hakkında Türkçe, akıcı ve özgün 3 paragraf bir biyografi yaz. "
-            "ÖNEMLI KURALLAR:\n"
-            "1. Atatürk'e atfedilen hiçbir alıntı veya söz kullanma — yalnızca hayatını, "
-            "fikirlerini ve katkılarını anlat.\n"
-            "2. Bilgileri Wikipedia'dan aldım ama cümleleri tamamen kendin kur, kopyalama.\n"
-            "3. Nutuk ve resmi belgelerde geçen gerçek tarihi bilgilere dayalı yaz.\n"
-            "Wikipedia özeti (referans için):\n%s\n\n"
-            "Sadece biyografi metnini yaz, başlık veya açıklama ekleme."
+            "Mustafa Kemal Atatürk hakkında Türkçe, akıcı ve özgün 3 paragraf biyografi yaz.\n"
+            "ZORUNLU KURALLAR:\n"
+            "1. Atatürk'e atfedilen hiçbir alıntı veya söz kullanma.\n"
+            "2. Yalnızca hayatını, fikirlerini ve katkılarını kendi cümlelerinle anlat.\n"
+            "3. Nutuk ve resmi belgelere dayalı, doğrulanmış tarihi bilgiler kullan.\n"
+            "4. Wikipedia metnini kopyalama, tamamen kendi ifadelerinle yaz.\n\n"
+            "Wikipedia referansı:\n%s\n\n"
+            "Sadece biyografi metnini yaz."
         ) % (wiki_raw[:1500] if wiki_raw else "Bilgi bulunamadı.")
     else:
-        lang_note = "(İngilizce Wikipedia'dan alındı, Türkçe bulunamadı)" if wiki_lang == "en" else ""
+        lang_note = " (İngilizce Wikipedia)" if wiki_lang == "en" else ""
         prompt = (
-            "Aşağıdaki Wikipedia özetini referans alarak %s hakkında "
-            "Türkçe, akıcı ve özgün 3 paragraf bir biyografi yaz. "
-            "Wikipedia metnini kopyalama — tamamen kendi cümlelerinle anlat. "
-            "Felsefi görüşlerini, yaşam hikayesini ve düşünce dünyasındaki yerini vurgula. %s\n\n"
-            "Wikipedia özeti:\n%s\n\n"
-            "Sadece biyografi metnini yaz, başlık veya açıklama ekleme."
+            "%s hakkında Wikipedia özetini%s referans alarak "
+            "Türkçe, akıcı, özgün 3 paragraf biyografi yaz. "
+            "Wikipedia metnini kopyalama, tamamen kendi cümlelerinle anlat. "
+            "Felsefi görüşlerini, yaşam hikayesini ve düşünce dünyasındaki yerini vurgula.\n\n"
+            "Wikipedia referansı:\n%s\n\n"
+            "Sadece biyografi metnini yaz."
         ) % (name, lang_note, wiki_raw[:1500] if wiki_raw else "Bilgi bulunamadı.")
 
-    bio = _claude_rewrite(prompt)
+    bio = _claude_rewrite(prompt, max_tokens=1000)
     return bio if bio else (wiki_raw[:800] if wiki_raw else "")
 
-def _build_category_description(akim, wiki_raw, wiki_lang):
-    """
-    Felsefi akım / kategori için Wikipedia verisini referans alarak
-    Claude'un kendi cümlesiyle açıklama yazar.
-    """
-    lang_note = "(İngilizce Wikipedia'dan alındı)" if wiki_lang == "en" else ""
-    prompt = (
-        "Aşağıdaki Wikipedia özetini referans alarak '%s' felsefi akımı hakkında "
-        "Türkçe, akıcı ve özgün 2-3 paragraf bir açıklama yaz. "
-        "Wikipedia metnini kopyalama — tamamen kendi cümlelerinle anlat. "
-        "Bu akımın temel ilkelerini, tarihsel arka planını ve günümüzdeki etkisini vurgula. %s\n\n"
-        "Wikipedia özeti:\n%s\n\n"
-        "Sadece açıklama metnini yaz, başlık veya açıklama ekleme."
-    ) % (akim, lang_note, wiki_raw[:1500] if wiki_raw else "Bilgi bulunamadı.")
+# ---------------------------------------------------------------------------
+# Yaşam tarihleri çıkar
+# ---------------------------------------------------------------------------
 
-    desc = _claude_rewrite(prompt)
+def _extract_dates(wiki_raw, name):
+    """Wikipedia metninden doğum/ölüm tarihlerini çıkarır."""
+    if not wiki_raw:
+        return "Bilinmiyor"
+    # Örn: (1844-1900), (MÖ 470 - MÖ 399) gibi kalıpları ara
+    pattern = r"\(([^)]*\d{3,4}[^)]*)\)"
+    matches = re.findall(pattern, wiki_raw[:500])
+    if matches:
+        return matches[0]
+    return "Bilinmiyor"
+
+# ---------------------------------------------------------------------------
+# Kategori açıklaması
+# ---------------------------------------------------------------------------
+
+def _build_category_description(akim, wiki_raw, wiki_lang):
+    """Felsefi akım için Wikipedia'yı referans alarak Claude ile özgün açıklama yazar."""
+    lang_note = " (İngilizce Wikipedia)" if wiki_lang == "en" else ""
+    prompt = (
+        "'%s' felsefi akımı hakkında Wikipedia özetini%s referans alarak "
+        "Türkçe, akıcı, özgün 2-3 paragraf açıklama yaz. "
+        "Wikipedia metnini kopyalama, tamamen kendi cümlelerinle anlat. "
+        "Temel ilkeleri, tarihsel arka planı ve günümüzdeki etkisini vurgula.\n\n"
+        "Wikipedia referansı:\n%s\n\n"
+        "Sadece açıklama metnini yaz."
+    ) % (akim, lang_note, wiki_raw[:1500] if wiki_raw else "Bilgi bulunamadı.")
+    desc = _claude_rewrite(prompt, max_tokens=600)
     return desc if desc else (wiki_raw[:500] if wiki_raw else "")
 
 # ---------------------------------------------------------------------------
@@ -112,22 +131,29 @@ def _wp_upload_image(image_path):
             "Content-Disposition": "attachment; filename=%s" % filename,
             "Content-Type": "image/jpeg",
         },
-        data=img_data,
-        timeout=60,
+        data=img_data, timeout=60,
     )
     log.info("WP media upload HTTP %d" % r.status_code)
     r.raise_for_status()
     return r.json()["id"]
 
 # ---------------------------------------------------------------------------
-# Kategori ve etiket yönetimi
+# Filozof taxonomy — bul veya oluştur
 # ---------------------------------------------------------------------------
 
-def _get_or_create_term(taxonomy, name, description=""):
-    """Kategori/etiketi bul, yoksa açıklamayla birlikte oluştur. ID döndür."""
+def _ensure_filozof(name, wiki_raw, wiki_lang, cover_img_path=None):
+    """
+    'filozof' taxonomy'sinde kaydı bul ya da yeni oluştur.
+    Yeni oluştururken:
+      - kisa_biyografi: Claude ile özgün biyografi
+      - yasam_tarihleri: Wikipedia'dan çıkarılmış tarihler
+      - filozof_kapak_resmi: kapak görseli media ID (varsa)
+    Döner: term ID
+    """
+    # 1. Mevcut mi ara
     try:
         r = requests.get(
-            "%s/wp-json/wp/v2/%s" % (WP_URL, taxonomy),
+            "%s/wp-json/wp/v2/filozof" % WP_URL,
             auth=(WP_USER, WP_APP_PASS),
             params={"search": name, "per_page": 5},
             timeout=15,
@@ -135,29 +161,56 @@ def _get_or_create_term(taxonomy, name, description=""):
         if r.status_code == 200:
             for term in r.json():
                 if term["name"].lower() == name.lower():
+                    log.info("Filozof taxonomy zaten var: %s (id=%s)" % (name, term["id"]))
                     return term["id"]
+    except Exception as e:
+        log.warning("Filozof arama hatasi: %s" % e)
 
-        # Yoksa oluştur
-        payload = {"name": name}
-        if description:
-            payload["description"] = description
+    # 2. Yeni oluştur
+    log.info("Yeni filozof taxonomy olusturuluyor: %s" % name)
+
+    bio      = _build_philosopher_bio(name, wiki_raw, wiki_lang)
+    tarihler = _extract_dates(wiki_raw, name)
+
+    # Kapak görseli yükle (post_img kullanılıyor, ayrı kapak yoksa)
+    media_id = None
+    if cover_img_path:
+        try:
+            media_id = _wp_upload_image(cover_img_path)
+            log.info("Filozof kapak gorseli yuklendi: %s" % media_id)
+        except Exception as e:
+            log.error("Filozof kapak gorseli yuklenemedi: %s" % e)
+
+    # ACF alanlarını da payload'a ekle
+    payload = {
+        "name":        name,
+        "description": bio,
+        "acf": {
+            "kisa_biyografi":       bio,
+            "yasam_tarihleri":      tarihler,
+            "filozof_kapak_resmi":  media_id or "",
+        }
+    }
+
+    try:
         r2 = requests.post(
-            "%s/wp-json/wp/v2/%s" % (WP_URL, taxonomy),
+            "%s/wp-json/wp/v2/filozof" % WP_URL,
             auth=(WP_USER, WP_APP_PASS),
-            json=payload,
-            timeout=15,
+            json=payload, timeout=20,
         )
+        log.info("Filozof taxonomy olusturma HTTP %d: %s" % (r2.status_code, r2.text[:200]))
         if r2.status_code in (200, 201):
             return r2.json()["id"]
     except Exception as e:
-        log.warning("Terim olusturma hatasi (%s - %s): %s" % (taxonomy, name, e))
+        log.error("Filozof taxonomy olusturma hatasi: %s" % e)
     return None
 
-def _prepare_category(quote_data):
-    """Akım için kategori oluştur — Wikipedia + Claude açıklamasıyla."""
-    akim = quote_data.get("akim", "Felsefe")
+# ---------------------------------------------------------------------------
+# Kategori — bul veya oluştur
+# ---------------------------------------------------------------------------
 
-    # Önce mevcut mi kontrol et
+def _ensure_category(akim):
+    """Kategoriyi bul veya Wikipedia + Claude açıklamasıyla oluştur."""
     try:
         r = requests.get(
             "%s/wp-json/wp/v2/categories" % WP_URL,
@@ -169,44 +222,71 @@ def _prepare_category(quote_data):
             for term in r.json():
                 if term["name"].lower() == akim.lower():
                     log.info("Kategori zaten var: %s" % akim)
-                    return [term["id"]]
-    except Exception:
-        pass
+                    return term["id"]
+    except Exception as e:
+        log.warning("Kategori arama hatasi: %s" % e)
 
-    # Yeni kategori — Wikipedia + Claude açıklaması
     log.info("Yeni kategori icin Wikipedia cekiliyor: %s" % akim)
     wiki_raw, wiki_lang = _fetch_wikipedia_raw(akim)
     description = _build_category_description(akim, wiki_raw, wiki_lang)
 
-    cat_id = _get_or_create_term("categories", akim, description)
-    return [cat_id] if cat_id else []
+    try:
+        r2 = requests.post(
+            "%s/wp-json/wp/v2/categories" % WP_URL,
+            auth=(WP_USER, WP_APP_PASS),
+            json={"name": akim, "description": description},
+            timeout=15,
+        )
+        if r2.status_code in (200, 201):
+            return r2.json()["id"]
+    except Exception as e:
+        log.error("Kategori olusturma hatasi: %s" % e)
+    return None
+
+# ---------------------------------------------------------------------------
+# Etiketler
+# ---------------------------------------------------------------------------
+
+def _get_or_create_tag(name):
+    try:
+        r = requests.get(
+            "%s/wp-json/wp/v2/tags" % WP_URL,
+            auth=(WP_USER, WP_APP_PASS),
+            params={"search": name, "per_page": 5},
+            timeout=15,
+        )
+        if r.status_code == 200:
+            for term in r.json():
+                if term["name"].lower() == name.lower():
+                    return term["id"]
+        r2 = requests.post(
+            "%s/wp-json/wp/v2/tags" % WP_URL,
+            auth=(WP_USER, WP_APP_PASS),
+            json={"name": name}, timeout=15,
+        )
+        if r2.status_code in (200, 201):
+            return r2.json()["id"]
+    except Exception as e:
+        log.warning("Tag hatasi (%s): %s" % (name, e))
+    return None
 
 def _prepare_tags(quote_data):
-    """Hashtag'lerden + akım + yazar + sabit etiketlerden tag ID listesi oluştur."""
     hashtags_raw = quote_data.get("hashtags", "")
     akim  = quote_data.get("akim", "")
     yazar = quote_data.get("author", "")
-
-    tags = []
-    for tag in re.findall(r"#(\w+)", hashtags_raw):
-        tags.append(tag)
-    if akim and akim not in tags:
-        tags.append(akim)
-    if yazar and yazar not in tags:
-        tags.append(yazar)
-    for fixed in ["Felsefe", "Bilgelik", "Felsefi Söz"]:
-        if fixed not in tags:
-            tags.append(fixed)
-
+    tags  = list(re.findall(r"#(\w+)", hashtags_raw))
+    for extra in [akim, yazar, "Felsefe", "Bilgelik", "Felsefi Söz"]:
+        if extra and extra not in tags:
+            tags.append(extra)
     tag_ids = []
     for tag in tags[:10]:
-        tid = _get_or_create_term("tags", tag)
+        tid = _get_or_create_tag(tag)
         if tid:
             tag_ids.append(tid)
     return tag_ids
 
 # ---------------------------------------------------------------------------
-# SEO uyumlu başlık
+# SEO başlık
 # ---------------------------------------------------------------------------
 
 def _build_title(quote_data):
@@ -214,18 +294,18 @@ def _build_title(quote_data):
     yazar = quote_data.get("author", "Anonim")
     max_len = 55
     if len(soz) > max_len:
-        truncated = soz[:max_len]
-        last_space = truncated.rfind(" ")
-        soz_kisalt = (truncated[:last_space] if last_space > 30 else truncated).rstrip(",.;:") + "..."
+        t = soz[:max_len]
+        ls = t.rfind(" ")
+        soz_k = (t[:ls] if ls > 30 else t).rstrip(",.;:") + "..."
     else:
-        soz_kisalt = soz.rstrip(",.;:")
-    return "%s — %s" % (soz_kisalt, yazar)
+        soz_k = soz.rstrip(",.;:")
+    return "%s — %s" % (soz_k, yazar)
 
 # ---------------------------------------------------------------------------
-# Özgün ve uzun içerik
+# İçerik (biyografi artık taxonomy'de, yazıda sadece editör yorumu)
 # ---------------------------------------------------------------------------
 
-def _build_content(quote_data, philosopher_bio):
+def _build_content(quote_data):
     soz      = quote_data.get("quote", "")
     yazar    = quote_data.get("author", "Anonim")
     akim     = quote_data.get("akim", "Felsefe")
@@ -234,43 +314,31 @@ def _build_content(quote_data, philosopher_bio):
 
     parts = []
 
-    # 1. Ana söz
+    # Ana söz
     parts.append("""<blockquote class="wp-block-quote">
 <p><em>"%s"</em></p>
 <cite>— %s | %s</cite>
 </blockquote>""" % (soz, yazar, akim))
 
-    # 2. Editör yorumu (uzun ve özgün)
-    if aciklama:
-        editor_prompt = (
-            "Aşağıdaki felsefi söz ve kısa açıklamasını referans alarak "
-            "Türkçe, akıcı ve özgün bir editör yorumu yaz (4-5 cümle). "
-            "Bu sözün modern hayattaki anlamını ve insana katkısını vurgula. "
-            "Kopyalama, tamamen kendi cümlelerinle yaz.\n\n"
-            "Söz: %s\nYazar: %s\nAkım: %s\nKısa açıklama: %s"
-        ) % (soz, yazar, akim, aciklama)
-        editor_text = _claude_rewrite(editor_prompt)
-        if not editor_text:
-            editor_text = aciklama
-    else:
-        editor_prompt = (
-            "Aşağıdaki felsefi sözü analiz ederek Türkçe, akıcı ve özgün bir editör yorumu yaz (4-5 cümle). "
-            "Sözün modern hayattaki anlamını, insana katkısını ve felsefi arka planını vurgula.\n\n"
-            "Söz: %s\nYazar: %s\nAkım: %s"
-        ) % (soz, yazar, akim)
-        editor_text = _claude_rewrite(editor_prompt)
-        if not editor_text:
-            editor_text = "%s felsefesinin derinliklerinden gelen bu söz, modern insanın varoluşsal sorularına ışık tutmaktadır." % akim
+    # Editör yorumu — Claude ile özgün
+    editor_prompt = (
+        "Aşağıdaki felsefi sözü analiz ederek Türkçe, akıcı, özgün 4-5 cümlelik "
+        "bir editör yorumu yaz. Sözün modern hayattaki anlamını, insana katkısını "
+        "ve felsefi arka planını vurgula. Kopyalama, tamamen kendi cümlelerinle yaz.\n\n"
+        "Söz: %s\nYazar: %s\nAkım: %s\nKısa açıklama: %s"
+    ) % (soz, yazar, akim, aciklama)
+
+    editor_text = _claude_rewrite(editor_prompt)
+    if not editor_text:
+        editor_text = aciklama if aciklama else (
+            "%s felsefesinin derinliklerinden gelen bu söz, modern insanın "
+            "varoluşsal sorularına ışık tutmaktadır." % akim
+        )
 
     parts.append("""<h2>Editörün Yorumu</h2>
-<p>%s</p>""" % editor_text)
+<p>%s</p>""" % editor_text.replace("\n\n", "</p><p>"))
 
-    # 3. Filozof biyografisi
-    if philosopher_bio:
-        parts.append("""<h2>%s Kimdir?</h2>
-<p>%s</p>""" % (yazar, philosopher_bio.replace("\n\n", "</p><p>")))
-
-    # 4. Hashtag'ler
+    # Hashtag'ler
     parts.append("""<p class="felsefemiz-tags">%s</p>""" % hashtags)
 
     return "\n\n".join(parts)
@@ -290,48 +358,46 @@ def post_to_wordpress(quote_data, post_img):
     aciklama = quote_data.get("aciklama", "")
     hashtags = quote_data.get("hashtags", "#Felsefe #Bilgelik")
 
-    # 1. Wikipedia'dan filozofun ham metnini çek
-    log.info("Wikipedia'dan filozof bilgisi cekiliyor: %s" % yazar)
+    # 1. Filozof taxonomy — Wikipedia + Claude biyografi + kapak görseli
+    log.info("Filozof taxonomy hazirlaniyor: %s" % yazar)
     wiki_raw, wiki_lang = _fetch_wikipedia_raw(yazar)
+    filozof_id = _ensure_filozof(yazar, wiki_raw, wiki_lang, cover_img_path=post_img)
 
-    # 2. Claude ile özgün biyografi yaz
-    log.info("Claude ile biyografi yaziliyor: %s" % yazar)
-    philosopher_bio = _build_philosopher_bio(yazar, wiki_raw, wiki_lang)
-
-    # 3. Başlık
-    title = _build_title(quote_data)
-    log.info("Baslik: %s" % title)
-
-    # 4. İçerik (editör yorumu + biyografi)
-    content = _build_content(quote_data, philosopher_bio)
-
-    # 5. Özet
-    excerpt = aciklama if aciklama else soz[:160]
-
-    # 6. Kategori (Wikipedia + Claude açıklamasıyla)
+    # 2. Kategori — Wikipedia + Claude açıklaması
     log.info("Kategori hazirlaniyor: %s" % akim)
-    categories = _prepare_category(quote_data)
+    cat_id = _ensure_category(akim)
 
-    # 7. Etiketler
+    # 3. Etiketler
     log.info("Etiketler hazirlaniyor...")
     tag_ids = _prepare_tags(quote_data)
 
-    # 8. Görsel yükle
+    # 4. Başlık
+    title = _build_title(quote_data)
+    log.info("Baslik: %s" % title)
+
+    # 5. İçerik (editör yorumu — biyografi taxonomy'de)
+    content = _build_content(quote_data)
+
+    # 6. Özet
+    excerpt = aciklama if aciklama else soz[:160]
+
+    # 7. Görseli yükle (post için)
     media_id = None
     try:
         media_id = _wp_upload_image(post_img)
-        log.info("Gorsel yuklendi, media_id: %s" % media_id)
+        log.info("Post gorseli yuklendi, media_id: %s" % media_id)
     except Exception as e:
-        log.error("Gorsel yuklenemedi: %s" % e)
+        log.error("Post gorseli yuklenemedi: %s" % e)
 
-    # 9. Post oluştur
+    # 8. Post oluştur
     post_data = {
         "title":          title,
         "content":        content,
         "excerpt":        excerpt,
         "status":         "publish",
-        "categories":     categories,
+        "categories":     [cat_id] if cat_id else [],
         "tags":           tag_ids,
+        "filozof":        [filozof_id] if filozof_id else [],
     }
     if media_id:
         post_data["featured_media"] = media_id
@@ -348,8 +414,7 @@ def post_to_wordpress(quote_data, post_img):
     r = requests.post(
         "%s/wp-json/wp/v2/posts" % WP_URL,
         auth=(WP_USER, WP_APP_PASS),
-        json=post_data,
-        timeout=30,
+        json=post_data, timeout=30,
     )
     log.info("WP post HTTP %d: %s" % (r.status_code, r.text[:300]))
     r.raise_for_status()

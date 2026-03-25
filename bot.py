@@ -6,7 +6,7 @@ from quote_generator import generate_quote
 from image_generator import create_post_image, create_story_image
 # publish_all kaldirildi
 from publishers import post_to_wordpress
-from telegram_sender import send_notification, start_listener
+from telegram_sender import send_for_approval, start_listener
 
 logging.basicConfig(
     level=logging.INFO,
@@ -50,7 +50,7 @@ def run():
         wp_url = _publish(quote_data, post_img)
         
         # 4. Bildirim Gönder
-        send_notification(post_img=post_img, story_img=story_img, quote_data=quote_data)
+        send_for_approval(post_img=post_img, story_img=story_img, quote_data=quote_data)
         
     except Exception as e:
         log.error("İçerik üretim hatası: %s" % e, exc_info=True)

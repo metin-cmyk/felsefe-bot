@@ -1,6 +1,134 @@
 import os, re, random, anthropic
 from datetime import datetime
 
+# ---------------------------------------------------------------------------
+# Atatürk — Sadece doğrulanmış, kaynaklarda belgelenmiş sözler
+# Kaynak: Nutuk, TBMM tutanakları, Atatürk'ün Söylev ve Demeçleri
+# ---------------------------------------------------------------------------
+
+ATATURK_SOZLER = [
+    {
+        "quote": "Egemenlik kayıtsız şartsız milletindir.",
+        "akim": "Türk Düşünce Tarihi / Cumhuriyet",
+        "kaynak": "TBMM açılış konuşması, 23 Nisan 1920",
+        "hashtags": "#Ataturk #Egemenlik #Cumhuriyet #Felsefe #Bilgelik",
+        "aciklama": "Milli egemenliğin temel ilkesini ifade eden bu söz, Türkiye Büyük Millet Meclisi'nin kuruluşunda dile getirilmiştir.",
+    },
+    {
+        "quote": "Muhtaç olduğun kudret, damarlarındaki asil kanda mevcuttur.",
+        "akim": "Türk Düşünce Tarihi / Cumhuriyet",
+        "kaynak": "Gençliğe Hitabe, Nutuk, 1927",
+        "hashtags": "#Ataturk #Genclige #Nutuk #Felsefe #Bilgelik",
+        "aciklama": "Nutuk'ta gençliğe yönelik kaleme alınan bu satırlar, milletin iç gücüne ve direncine duyulan inancı yansıtır.",
+    },
+    {
+        "quote": "Ey Türk gençliği! Birinci vazifen, Türk istiklalini, Türk Cumhuriyeti'ni ilelebet muhafaza ve müdafaa etmektir.",
+        "akim": "Türk Düşünce Tarihi / Cumhuriyet",
+        "kaynak": "Gençliğe Hitabe, Nutuk, 1927",
+        "hashtags": "#Ataturk #Genclige #Nutuk #Felsefe #Bilgelik",
+        "aciklama": "Nutuk'un sonunda gençliğe hitaben yazılan bu bölüm, cumhuriyetin gelecek nesillere emanet edilişini belgeler.",
+    },
+    {
+        "quote": "Hayatta en hakiki mürşit ilimdir.",
+        "akim": "Türk Düşünce Tarihi / Aydınlanma",
+        "kaynak": "Atatürk'ün Söylev ve Demeçleri",
+        "hashtags": "#Ataturk #Ilim #Bilim #Felsefe #Bilgelik",
+        "aciklama": "Bilimi tek rehber olarak kabul eden bu söz, Atatürk'ün aydınlanmacı düşünce anlayışını özetler.",
+    },
+    {
+        "quote": "Biz cahilliğe karşı savaştık, silahla yapılan savaştan daha zor olan bu savaş, hâlâ devam etmektedir.",
+        "akim": "Türk Düşünce Tarihi / Aydınlanma",
+        "kaynak": "Atatürk'ün Söylev ve Demeçleri, Cilt II",
+        "hashtags": "#Ataturk #Egitim #Aydinlanma #Felsefe #Bilgelik",
+        "aciklama": "Eğitime ve bilgiye verdiği önemi vurgulayan Atatürk, cehaletle mücadeleyi silahlı savaştan daha uzun ve zorlu bulduğunu dile getirmiştir.",
+    },
+    {
+        "quote": "Türk milletinin karakteri yüksektir, Türk milleti çalışkandır, Türk milleti zekidir.",
+        "akim": "Türk Düşünce Tarihi / Cumhuriyet",
+        "kaynak": "Atatürk'ün Söylev ve Demeçleri",
+        "hashtags": "#Ataturk #TurkMilleti #Cumhuriyet #Felsefe #Bilgelik",
+        "aciklama": "Türk milletinin temel niteliklerini sıralayan bu söz, ulusal kimliğin inşasına yönelik Atatürk'ün görüşünü yansıtır.",
+    },
+    {
+        "quote": "Yurtta sulh, cihanda sulh.",
+        "akim": "Türk Düşünce Tarihi / Cumhuriyet",
+        "kaynak": "Atatürk'ün dış politika ilkesi, 1931",
+        "hashtags": "#Ataturk #Baris #Sulh #Felsefe #Bilgelik",
+        "aciklama": "Türkiye Cumhuriyeti'nin dış politikasının temel ilkesi olan bu söz, barışçı bir ulusal ve uluslararası düzen anlayışını ifade eder.",
+    },
+    {
+        "quote": "Türk, öğün, çalış, güven.",
+        "akim": "Türk Düşünce Tarihi / Cumhuriyet",
+        "kaynak": "Atatürk'ün Söylev ve Demeçleri",
+        "hashtags": "#Ataturk #TurkMilleti #Calisma #Felsefe #Bilgelik",
+        "aciklama": "Kısa ve öz biçimde milli bir ilkeyi dile getiren bu söz, özgüveni, emeği ve kimliği ön plana çıkarır.",
+    },
+    {
+        "quote": "Büyük davamız, medeniyetçe en ileri, en müreffeh ve en mesut millet olmak ve olmaya devam etmektir.",
+        "akim": "Türk Düşünce Tarihi / Aydınlanma",
+        "kaynak": "Atatürk'ün Söylev ve Demeçleri, Cilt I",
+        "hashtags": "#Ataturk #Medeniyet #Kalkinma #Felsefe #Bilgelik",
+        "aciklama": "Modernleşme ve uygarlık idealini açıkça ortaya koyan bu söz, Atatürk'ün Türkiye için belirlediği uzun vadeli hedefi yansıtır.",
+    },
+    {
+        "quote": "Ne mutlu Türküm diyene.",
+        "akim": "Türk Düşünce Tarihi / Cumhuriyet",
+        "kaynak": "10. Yıl Nutku, 29 Ekim 1933",
+        "hashtags": "#Ataturk #Cumhuriyet #OnYil #Felsefe #Bilgelik",
+        "aciklama": "Cumhuriyetin onuncu yılında söylenen bu söz, ulusal kimlikle barışmayı ve gururu simgeleyen en bilinen ifadelerden biridir.",
+    },
+    {
+        "quote": "Sanatsız kalan bir milletin hayat damarlarından biri kopmuş demektir.",
+        "akim": "Türk Düşünce Tarihi / Aydınlanma",
+        "kaynak": "Atatürk'ün Söylev ve Demeçleri",
+        "hashtags": "#Ataturk #Sanat #Kultur #Felsefe #Bilgelik",
+        "aciklama": "Sanatın milli hayattaki vazgeçilmez yerine dikkat çeken bu söz, Atatürk'ün kültür ve estetik anlayışını özetler.",
+    },
+    {
+        "quote": "Türk çocuğu ecdadını tanıdıkça daha büyük işler yapmak için kendinde kuvvet bulacaktır.",
+        "akim": "Türk Düşünce Tarihi / Cumhuriyet",
+        "kaynak": "Atatürk'ün Söylev ve Demeçleri",
+        "hashtags": "#Ataturk #Tarih #Genclik #Felsefe #Bilgelik",
+        "aciklama": "Tarihi bilincin gençliğe güç verdiğini vurgulayan bu söz, geçmiş ile gelecek arasındaki köprüyü kurar.",
+    },
+    {
+        "quote": "Ordumuz, Türk birliğinin, Türk kudret ve kabiliyetinin, Türk vatanseverliğinin çelik bir ifadesidir.",
+        "akim": "Türk Düşünce Tarihi / Cumhuriyet",
+        "kaynak": "Atatürk'ün Söylev ve Demeçleri",
+        "hashtags": "#Ataturk #Ordu #Vatan #Felsefe #Bilgelik",
+        "aciklama": "Ordunun milli kimlikle ilişkisini ifade eden bu söz, ulusal savunma anlayışını ve millî birliği ön plana çıkarır.",
+    },
+    {
+        "quote": "Fikri hür, vicdanı hür, irfanı hür nesiller yetiştirmek istiyoruz.",
+        "akim": "Türk Düşünce Tarihi / Aydınlanma",
+        "kaynak": "Atatürk'ün Söylev ve Demeçleri, Cilt II",
+        "hashtags": "#Ataturk #Ozgurluk #Egitim #Felsefe #Bilgelik",
+        "aciklama": "Eğitimin özgürlükçü ve aydınlanmacı boyutunu vurgulayan bu söz, Atatürk'ün nesiller için beslediği en temel ideali yansıtır.",
+    },
+    {
+        "quote": "Hâkimiyet, hiçbir mânada, hiçbir şekil ve renkte, ortaklık kabul etmez.",
+        "akim": "Türk Düşünce Tarihi / Cumhuriyet",
+        "kaynak": "TBMM, 1923",
+        "hashtags": "#Ataturk #Hakimiyet #BagimsizlikFelsefe #Bilgelik",
+        "aciklama": "Milli egemenliğin bölünemezliğini ifade eden bu söz, cumhuriyetin kurucu ilkelerinden birini açıkça ortaya koyar.",
+    },
+]
+
+def _get_ataturk_quote():
+    """Doğrulanmış Atatürk sözlerinden rastgele birini döndürür. Claude hiç devreye girmez."""
+    item = random.choice(ATATURK_SOZLER)
+    quote = item["quote"]
+    twitter_text = "%s\n\n— Mustafa Kemal Atatürk\n\n%s" % (quote, item["hashtags"])
+    return {
+        "quote":    quote,
+        "author":   "Mustafa Kemal Atatürk",
+        "akim":     item["akim"],
+        "hashtags": item["hashtags"],
+        "aciklama": item["aciklama"],
+        "twitter":  twitter_text,
+    }
+
+
 client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
 
 # 50'den Fazla Felsefi Akım, İnanç ve Gelenek
@@ -161,25 +289,11 @@ def generate_quote():
         ozel_gun_mesaji = "BUGÜN 23 NİSAN. Söz doğrudan kayıtsız şartsız milli egemenlik, çocuklara ve geleceğe bırakılan aydınlık miras, meclisin ve demokrasinin gücü üzerine olmalı."
 
     if ozel_gun_mesaji:
-        akim = "Türk Düşünce Tarihi / Cumhuriyet"
-        filozof = "Mustafa Kemal Atatürk"
-        konu = ozel_gun_mesaji
+        # Özel günlerde de Atatürk için sadece doğrulanmış sözler listesinden al
+        return _get_ataturk_quote()
     elif random.random() < 0.20:
-        akim = "Türk Düşünce Tarihi / Aydınlanma"
-        filozof = "Mustafa Kemal Atatürk"
-        ataturk_konulari = [
-            "Akıl ve bilimin dogmalara karşı kazandığı mutlak zafer", 
-            "Tam bağımsızlık, hürriyet ve bir ulusun kendi kaderini yazması", 
-            "Cehaletle savaşın, silahlı savaştan çok daha çetin olması",
-            "Fikri hür, vicdanı hür, irfanı hür nesillerin inşası",
-            "Geçmişin prangalarından kurtulup geleceğe ve yeniliğe yön vermek",
-            "Milletin kayıtsız şartsız iradesinin her türlü gücün üstünde olması",
-            "Sanatsız kalan bir milletin hayat damarlarından birinin kopması",
-            "Aklın, mantığın ve bilimin rehberliğinde dogmaları yıkmak",
-            "Bireyin kul olmaktan çıkıp özgür bir vatandaşa dönüşmesi",
-            "Umutsuzluğa yer olmaması ve imkansızlıklar içinde var olmak"
-        ]
-        konu = random.choice(ataturk_konulari)
+        # Atatürk için Claude kullanılmaz — doğrulanmış sözler listesinden al
+        return _get_ataturk_quote()
     else:
         akim = random.choice(AKIMLAR)
         if akim in FILOZOFLAR and FILOZOFLAR[akim] and random.random() < 0.8:
@@ -192,7 +306,10 @@ def generate_quote():
     system = """Sen derin bir felsefe bilgisine sahip Türkçe içerik üreticisisin.
 Felsefi sözler üretiyorsun — kısa, güçlü, düşündürücü.
 
-Eğer düşünür Mustafa Kemal Atatürk ise; sözü onun akılcı, bağımsızlıkçı ve devrimci karakterine uygun yaz.
+Eğer düşünür Mustafa Kemal Atatürk ise:
+- KESİNLİKLE kendi yazmadığı, söylemediği, kaynaklarda geçmeyen hiçbir söz üretme.
+- Sadece Nutuk, TBMM tutanakları veya resmi tarihi kaynaklarda belgelenmiş, doğrulanmış sözlerini kullan.
+- Uydurmak veya yorumlamak YASAKTIR. Doğrulanmış söz yoksa YAZAR alanına başka bir Türk düşünür yaz.
 Değilse; verilen akıma ve düşünüre sadık kalarak çok vurucu, sarsıcı, özgün bir edebi alıntı üret. Klişelerden uzak dur.
 
 ÖNEMLİ KURALLAR:
