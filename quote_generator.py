@@ -592,3 +592,105 @@ def _parse(text, default_autor, default_akim):
         "aciklama": get("ACIKLAMA"),
         "twitter": twitter
     }
+
+# ---------------------------------------------------------------------------
+# Wikiquote wikitext API — gercek sozler (dosyanin sonuna eklendi)
+# ---------------------------------------------------------------------------
+
+import re as _re
+import logging as _logging
+_wq_log = _logging.getLogger(__name__)
+
+def _fetch_real_quotes_from_wikipedia(philosopher):
+    """
+    Wikiquote TR ve EN'den filozofun GERCEK sozlerini cekerr.
+    action=parse&prop=wikitext kullanir — tek dogru yontem.
+    """
+    import requests as _req
+
+    def _parse_wikitext(wikitext):
+        quotes = []
+        for line in wikitext.split("\n"):
+            s = line.strip()
+            if not s.startswith("*") or s.startswith("**"):
+                continue
+            clean = s.lstrip("* ").strip()
+            clean = _re.sub(r"\[\[(?:[^|\]]*\|)?([^\]]+)\]\]", r"\1", clean)
+            clean = _re.sub(r"\{\{[^}]*\}\}", "", clean)
+            clean = _re.sub(r"<ref[^>]*>.*?</ref>", "", clean, flags=_re.DOTALL)
+            clean = _re.sub(r"<br\s*/?>", " ", clean)
+            clean = _re.sub(r"<[^>]+>", "", clean)
+            clean = _re.sub(r"('''|''|')", "", clean)
+            clean = clean.strip().strip('"').strip("'").strip()
+            if 25 < len(clean) < 400:
+                quotes.append(clean)
+        return quotes
+
+    for lang in ("tr", "en"):
+        try:
+            r = _req.get(
+                "https://%s.wikiquote.org/w/api.php" % lang,
+                params={"action": "parse", "page": philosopher, "prop": "wikitext", "format": "json"},
+                timeout=15,
+            )
+            if r.status_code != 200:
+                continue
+            data = r.json()
+            if "error" in data:
+                continue
+            wikitext = data.get("parse", {}).get("wikitext", {}).get("*", "")
+            if not wikitext:
+                continue
+            quotes = _parse_wikitext(wikitext)
+            if quotes:
+                _wq_log.info("Wikiquote %s: %s — %d soz" % (lang.upper(), philosopher, len(quotes)))
+                return quotes[:25], lang
+        except Exception as e:
+            _wq_log.warning("Wikiquote %s hatasi (%s): %s" % (lang, philosopher, e))
+
+    return [], "tr"
+
+
+def _select_best_quote(philosopher, akim, konu, quotes_list):
+    """
+    Wikiquote'tan gelen GERCEK sozler arasinda Claude en uygununu SECER.
+    Claude soz UYDURMAZ — sadece listeden secer ve Turkce formatlar.
+    """
+    quotes_text = "\n".join(["  %d. %s" % (i+1, q) for i, q in enumerate(quotes_list)])
+
+    system = """Sen bir felsefe editorusun. Sana filozofun GERCEK, dogrulanmis sozleri verilecek.
+Gorev: Bu listeden konuya EN UYGUN sozi sec, Turkce'ye cevir (zaten Turkce ise olduğu gibi birak) ve formatla.
+
+KESIN KURALLAR:
+1. Listede OLMAYAN hicbir soz yazma. Sadece verilen listeden sec.
+2. Secilen sozi sadece gerekirse Turkce'ye cevir. Anlamini DEGISTIRME.
+3. SOZ alaninda tirnak isareti kullanma.
+4. Hashtagleri # ile baslat, Turkce karakter kullanma (o,u,s,c,i,g).
+
+Yanitini TAM OLARAK bu formatta ver:
+
+SOZ:
+[Secilen sozun Turkce hali — tirnak YOK]
+---
+YAZAR:
+[Filozofun adi]
+---
+AKIM:
+[Felsefi akim]
+---
+HASHTAG:
+[5 hashtag — #Felsefe ve #Bilgelik zorunlu, 3 tane daha]
+---
+ACIKLAMA:
+[Sozun 1-2 cumlelik Turkce aciklamasi]
+---
+TWITTER:
+[Soz tirnaksiz, iki satir bosluk, uzun tire ve yazar adi]"""
+
+    msg = client.messages.create(
+        model="claude-sonnet-4-20250514",
+        max_tokens=600,
+        system=system,
+        messages=[{"role": "user", "content": "Dusunur: %s\nAkim: %s\nKonu: %s\n\nGERCEK sozler listesi:\n%s" % (philosopher, akim, konu, quotes_text)}]
+    )
+    return msg.content[0].text.strip()
