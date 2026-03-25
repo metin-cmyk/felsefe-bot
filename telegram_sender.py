@@ -52,7 +52,7 @@ def _process_single_generation():
     qd = generate_quote()
     pi, pal = create_post_image(qd)
     si = create_story_image(qd, pal)
-    _publish(qd, pi, si)
+    _publish(qd, pi)
     send_notification(pi, si, qd)
 
 def _poll():
