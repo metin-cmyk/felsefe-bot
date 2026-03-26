@@ -10,6 +10,12 @@ except ImportError:
     db_query  = lambda *a, **k: None
     db_execute= lambda *a, **k: None
 
+try:
+    from quote_sources import fetch_all_quotes
+    MULTI_SOURCE = True
+except ImportError:
+    MULTI_SOURCE = False
+
 log = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
@@ -271,7 +277,12 @@ def generate_quote():
 
     MAX_DENEME = 8
     for deneme in range(MAX_DENEME):
-        real_quotes, lang = _fetch_real_quotes_from_wikipedia(filozof)
+        # Çok kaynaklı söz toplama
+        if MULTI_SOURCE:
+            real_quotes = fetch_all_quotes(filozof)
+            lang = "multi"
+        else:
+            real_quotes, lang = _fetch_real_quotes_from_wikipedia(filozof)
 
         if real_quotes:
             filtered = [q for q in real_quotes if q[:60] not in recent_quotes]

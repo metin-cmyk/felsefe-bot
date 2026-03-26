@@ -26,6 +26,11 @@ from quote_generator import (
     _get_random_konu,
     _db_save_quote,
 )
+try:
+    from quote_sources import fetch_all_quotes
+    MULTI_SOURCE = True
+except ImportError:
+    MULTI_SOURCE = False
 
 def uret(hedef=50):
     """DB'ye hedef kadar yeni Türkçe söz üret ve kaydet."""
@@ -59,9 +64,12 @@ def uret(hedef=50):
 
         log.info("[%d/%d] Çekiliyor: %s (%s)" % (basarili+1, hedef, filozof, akim))
 
-        real_quotes, lang = _fetch_real_quotes_from_wikipedia(filozof)
+        if MULTI_SOURCE:
+            real_quotes = fetch_all_quotes(filozof)
+        else:
+            real_quotes, _ = _fetch_real_quotes_from_wikipedia(filozof)
         if not real_quotes:
-            log.warning("Wikiquote'ta söz yok: %s" % filozof)
+            log.warning("Hiçbir kaynakta söz yok: %s" % filozof)
             continue
 
         raw    = _select_best_quote(filozof, akim, konu, real_quotes)
