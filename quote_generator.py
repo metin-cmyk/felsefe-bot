@@ -1,5 +1,6 @@
 import os, re, random, anthropic, logging
 from datetime import datetime
+from pathlib import Path
 
 log = logging.getLogger(__name__)
 
@@ -511,6 +512,29 @@ KONULAR = [
     "Deliliğin sanata dönüşmesi ve aklın zincirlerinden kurtulan yaratıcılık", "Okunan bir kitabın veya izlenen bir tablonun insanın ruhunu geri dönülmez şekilde değiştirmesi"
 ]
 
+
+def _load_recent_authors(n=15):
+    """Son n paylaşımdan yazar setini döndür."""
+    try:
+        pf = Path("posted.json")
+        if not pf.exists():
+            return set()
+        posted = json.loads(pf.read_text(encoding="utf-8"))
+        return set(p.get("author", "") for p in posted[-n:])
+    except Exception:
+        return set()
+
+def _load_recent_quotes(n=30):
+    """Son n paylaşımdan söz setini döndür (ilk 60 karakter)."""
+    try:
+        pf = Path("posted.json")
+        if not pf.exists():
+            return set()
+        posted = json.loads(pf.read_text(encoding="utf-8"))
+        return set(p.get("quote", "")[:60] for p in posted[-n:])
+    except Exception:
+        return set()
+
 def generate_quote():
     bugun = datetime.now()
     ay = bugun.month
@@ -535,38 +559,50 @@ def generate_quote():
         # Atatürk için Claude kullanılmaz — doğrulanmış sözler listesinden al
         return _get_ataturk_quote()
     else:
-        akim = random.choice(AKIMLAR)
-        if akim in FILOZOFLAR and FILOZOFLAR[akim] and random.random() < 0.8:
-            filozof = random.choice(FILOZOFLAR[akim])
-        else:
-            filozof = random.choice(FILOZOFLAR.get("Antik Yunan Felsefesi", ["Sokrates"]))
+        recent_authors = _load_recent_authors(15)
+        recent_quotes  = _load_recent_quotes(30)
+        # Son 15 paylaşımda olmayan bir yazar seç
+        for _ in range(20):
+            akim = random.choice(AKIMLAR)
+            if akim in FILOZOFLAR and FILOZOFLAR[akim] and random.random() < 0.8:
+                filozof = random.choice(FILOZOFLAR[akim])
+            else:
+                filozof = random.choice(FILOZOFLAR.get("Antik Yunan Felsefesi", ["Sokrates"]))
+            if filozof not in recent_authors:
+                break
         konu = random.choice(KONULAR)
+        log.info("Secilen filozof: %s" % filozof)
 
-    # Wikiquote'tan gercek sozleri cek — Claude soz UYDURMUYOR
-    # Gercek soz bulunamazsa baska filozof denenecek, uydurma asla yok
-    MAX_DENEME = 5
+    MAX_DENEME = 8
     for deneme in range(MAX_DENEME):
         real_quotes, lang = _fetch_real_quotes_from_wikipedia(filozof)
 
         if real_quotes:
-            # Gercek sozler bulundu — Claude sadece secer ve formatlar
-            raw = _select_best_quote(filozof, akim, konu, real_quotes)
+            filtered = [q for q in real_quotes if q[:60] not in recent_quotes]
+            if not filtered:
+                filtered = real_quotes
+
+            raw    = _select_best_quote(filozof, akim, konu, filtered)
             result = _parse(raw, filozof, akim)
             if result and result.get("quote"):
-                return result
-            log.warning("Parse bos dondu, baska filozof deneniyor.")
+                if result["quote"][:60] in recent_quotes:
+                    log.warning("Bu soz zaten paylasılmis, atlaniyor.")
+                else:
+                    return result
+            log.warning("Parse bos/tekrar, baska filozof deneniyor.")
 
-        # Bu filozof icin soz bulunamadi — baska birini dene
-        log.warning("Wikiquote'ta soz bulunamadi: %s — baska filozof deneniyor (%d/%d)" % (filozof, deneme+1, MAX_DENEME))
-        akim = random.choice(AKIMLAR)
-        if akim in FILOZOFLAR and FILOZOFLAR[akim]:
-            filozof = random.choice(FILOZOFLAR[akim])
-        else:
-            filozof = random.choice(FILOZOFLAR.get("Antik Yunan Felsefesi", ["Sokrates"]))
+        log.warning("Soz bulunamadi: %s (%d/%d)" % (filozof, deneme+1, MAX_DENEME))
+        for _ in range(10):
+            akim = random.choice(AKIMLAR)
+            if akim in FILOZOFLAR and FILOZOFLAR[akim]:
+                filozof = random.choice(FILOZOFLAR[akim])
+            else:
+                filozof = random.choice(FILOZOFLAR.get("Antik Yunan Felsefesi", ["Sokrates"]))
+            if filozof not in recent_authors:
+                break
         konu = random.choice(KONULAR)
 
-    # 5 denemede de bulunamazsa None don — bot.py bu durumu handle eder
-    log.error("5 denemede de Wikiquote'tan gercek soz bulunamadi! Icerik uretimi atlaniyor.")
+    log.error("8 denemede de gercek soz bulunamadi.")
     return None
 
 def _clean_quotes(text):
@@ -850,6 +886,24 @@ TWITTER:
         except Exception as e:
             log.warning("Claude API hatasi (deneme %d/3): %s" % (attempt+1, e))
             if attempt < 2:
-                time.sleep(15)  # API asiri yuklenmesine karsi bekleme
-            else:
-                return ""
+                time.sleep(10)
+
+    # Claude basarisiz — fallback ile dogrudan listeden sec
+    log.warning("Claude API basarisiz, fallback: %s" % philosopher)
+    return _fallback_format(philosopher, akim, quotes_list)
+
+
+def _fallback_format(philosopher, akim, quotes_list):
+    """Claude API basarisiz olduğunda listeden dogrudan soz secer ve formatlar."""
+    if not quotes_list:
+        return ""
+    # Türkçe karakter içerenleri tercih et
+    turkce = [q for q in quotes_list if any(c in q for c in "çşğüöıÇŞĞÜÖİ")]
+    secim  = turkce[0] if turkce else quotes_list[0]
+    secim  = re.sub(r'[""\u201c\u201d\u2018\u2019«»\']', "", secim).strip()[:250]
+    akim_tag = re.sub(r"[^a-zA-Z0-9]", "", akim.split("/")[0].strip())
+    yt_tag   = re.sub(r"[^a-zA-Z0-9]", "", (philosopher.split()[-1] if philosopher else "Felsefe"))
+    hashtags = "#Felsefe #Bilgelik #%s #%s #DusunenInsan" % (akim_tag, yt_tag)
+    return """SOZ:\n%s\n---\nYAZAR:\n%s\n---\nAKIM:\n%s\n---\nHASHTAG:\n%s\n---\nACIKLAMA:\n%s felsefi düşüncesinden önemli bir gözlem.\n---\nTWITTER:\n%s — %s""" % (
+        secim, philosopher, akim, hashtags, philosopher, secim, philosopher
+    )
