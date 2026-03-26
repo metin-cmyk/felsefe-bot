@@ -145,41 +145,129 @@ def _get_random_konu():
             log.warning("DB konu hatası: %s" % e)
     return random.choice(KONULAR)
 
+def _db_get_unused_quote():
+    """
+    DB'deki sozler tablosundan daha önce yayınlanmamış Türkçe söz çeker.
+    Atatürk hariç filozoflardan rastgele seçer.
+    """
+    if not DB_AVAILABLE:
+        return None
+    try:
+        recent_authors = _load_recent_authors(15)
+        recent_quotes  = _load_recent_quotes(30)
+
+        # Son 15 yazardan farklı, son 30 sözden farklı, Türkçe, onaylı
+        rows = db_query(
+            """SELECT s.id, s.filozof_ad, s.soz, s.akim, s.hashtags, s.aciklama, s.kaynak
+               FROM sozler s
+               WHERE s.dil = 'tr'
+                 AND s.dogrulanmis = 1
+                 AND s.filozof_ad != 'Mustafa Kemal Atatürk'
+                 AND s.soz_ozet NOT IN (
+                     SELECT COALESCE(soz_ozet,'') FROM yayinlar 
+                     ORDER BY yayinlandi_at DESC LIMIT 30
+                 )
+               ORDER BY RAND()
+               LIMIT 20""",
+        )
+        if not rows:
+            # Kısıtlamayı gevşet — sadece son 10 yayını hariç tut
+            rows = db_query(
+                """SELECT s.id, s.filozof_ad, s.soz, s.akim, s.hashtags, s.aciklama, s.kaynak
+                   FROM sozler s
+                   WHERE s.dil = 'tr'
+                     AND s.dogrulanmis = 1
+                     AND s.filozof_ad != 'Mustafa Kemal Atatürk'
+                   ORDER BY RAND() LIMIT 10"""
+            )
+        if not rows:
+            return None
+
+        for row in rows:
+            if row["filozof_ad"] in recent_authors:
+                continue
+            if row["soz"][:60] in recent_quotes:
+                continue
+            log.info("DB'den soz alindi: %s" % row["filozof_ad"])
+            return {
+                "quote":    row["soz"],
+                "author":   row["filozof_ad"],
+                "akim":     row["akim"] or "Felsefe",
+                "hashtags": row["hashtags"] or "#Felsefe #Bilgelik",
+                "aciklama": row["aciklama"] or "",
+                "kaynak":   row["kaynak"] or "",
+                "twitter":  row["soz"][:200] + " — " + row["filozof_ad"],
+            }
+        # Tüm filtreler başarısız — ilkini al
+        row = rows[0]
+        return {
+            "quote":    row["soz"],
+            "author":   row["filozof_ad"],
+            "akim":     row["akim"] or "Felsefe",
+            "hashtags": row["hashtags"] or "#Felsefe #Bilgelik",
+            "aciklama": row["aciklama"] or "",
+            "kaynak":   row["kaynak"] or "",
+            "twitter":  row["soz"][:200] + " — " + row["filozof_ad"],
+        }
+    except Exception as e:
+        log.error("DB soz cekme hatasi: %s" % e)
+        return None
+
+
+def _db_save_quote(result):
+    """Üretilen sözü DB'ye kaydet (sozler tablosu)."""
+    if not DB_AVAILABLE or not result:
+        return
+    try:
+        db_execute(
+            """INSERT IGNORE INTO sozler 
+               (filozof_ad, soz, akim, hashtags, aciklama, dil, dogrulanmis, kaynak_site)
+               VALUES (%s, %s, %s, %s, %s, 'tr', 1, 'wikiquote')""",
+            (
+                result.get("author", ""),
+                result.get("quote", ""),
+                result.get("akim", ""),
+                result.get("hashtags", ""),
+                result.get("aciklama", ""),
+            )
+        )
+        log.info("Yeni soz DB'ye kaydedildi: %s" % result.get("author", ""))
+    except Exception as e:
+        log.warning("DB soz kayit hatasi: %s" % e)
+
+
 def generate_quote():
     bugun = datetime.now()
     ay = bugun.month
     gun = bugun.day
-    ozel_gun_mesaji = None
-    
-    if ay == 11 and gun == 10:
-        ozel_gun_mesaji = "BUGÜN 10 KASIM, ATATÜRK'Ü ANMA GÜNÜ. Söz doğrudan onun fikirlerinin ölümsüzlüğü, hüznün kararlılığa dönüşmesi ve Cumhuriyet'in sonsuz bekası üzerine son derece etkileyici, asil ve sarsıcı bir mesaj içermeli."
-    elif ay == 10 and gun == 29:
-        ozel_gun_mesaji = "BUGÜN 29 EKİM CUMHURİYET BAYRAMI. Söz doğrudan Cumhuriyet'in fazileti, milletin bağımsızlık karakteri, aydınlanma, çağdaşlaşma ve egemenlik üzerine çok coşkulu, devrimci bir mesaj içermeli."
-    elif ay == 8 and gun == 30:
-        ozel_gun_mesaji = "BUGÜN 30 AĞUSTOS ZAFER BAYRAMI. Söz doğrudan Türk milletinin ve ordusunun bağımsızlık azmi, esarete karşı isyanı, emperyalizme vurulan tokat ve hürriyetin kutsallığı üzerine destansı bir mesaj içermeli."
-    elif ay == 5 and gun == 19:
-        ozel_gun_mesaji = "BUGÜN 19 MAYIS. Söz doğrudan kurtuluş ateşinin yakılması, gençliğe duyulan güven, umut, akılcılık ve Türkiye'nin aydınlık geleceği üzerine motive edici bir mesaj içermeli."
-    elif ay == 4 and gun == 23:
-        ozel_gun_mesaji = "BUGÜN 23 NİSAN. Söz doğrudan kayıtsız şartsız milli egemenlik, çocuklara ve geleceğe bırakılan aydınlık miras, meclisin ve demokrasinin gücü üzerine olmalı."
 
-    if ozel_gun_mesaji:
-        # Özel günlerde de Atatürk için sadece doğrulanmış sözler listesinden al
+    # Özel günler — Atatürk
+    if (ay == 11 and gun == 10) or (ay == 10 and gun == 29) or        (ay == 8 and gun == 30) or (ay == 5 and gun == 19) or (ay == 4 and gun == 23):
         return _get_ataturk_quote()
-    elif random.random() < 0.20:
-        # Atatürk için Claude kullanılmaz — doğrulanmış sözler listesinden al
+
+    # %20 ihtimalle Atatürk
+    if random.random() < 0.20:
         return _get_ataturk_quote()
-    else:
-        recent_authors = _load_recent_authors(15)
-        recent_quotes  = _load_recent_quotes(30)
-        # Son 15 paylaşımda olmayan bir yazar seç
-        akimlar_list = _get_akimlar()
-        for _ in range(20):
-            akim = random.choice(akimlar_list)
-            filozof = _get_random_filozof(akim, exclude=recent_authors)
-            if filozof not in recent_authors:
-                break
-        konu = _get_random_konu()
-        log.info("Secilen filozof: %s" % filozof)
+
+    # ── ADIM 1: DB'de hazır söz var mı? ──────────────────────
+    db_result = _db_get_unused_quote()
+    if db_result:
+        log.info("DB'den doğrudan söz kullanılıyor: %s" % db_result["author"])
+        return db_result
+
+    # ── ADIM 2: DB'de söz yok — Wikiquote'tan çek, DB'ye kaydet ─
+    log.info("DB'de uygun soz yok, Wikiquote'tan cekilecek...")
+    recent_authors = _load_recent_authors(15)
+    recent_quotes  = _load_recent_quotes(30)
+
+    akimlar_list = _get_akimlar()
+    for _ in range(20):
+        akim    = random.choice(akimlar_list)
+        filozof = _get_random_filozof(akim, exclude=recent_authors)
+        if filozof not in recent_authors:
+            break
+    konu = _get_random_konu()
+    log.info("Wikiquote'tan cekilecek: %s" % filozof)
 
     MAX_DENEME = 8
     for deneme in range(MAX_DENEME):
@@ -196,12 +284,14 @@ def generate_quote():
                 if result["quote"][:60] in recent_quotes:
                     log.warning("Bu soz zaten paylasılmis, atlaniyor.")
                 else:
+                    # DB'ye kaydet — bir sonraki seferinde hazır olsun
+                    _db_save_quote(result)
                     return result
             log.warning("Parse bos/tekrar, baska filozof deneniyor.")
 
         log.warning("Soz bulunamadi: %s (%d/%d)" % (filozof, deneme+1, MAX_DENEME))
         for _ in range(10):
-            akim = random.choice(akimlar_list)
+            akim    = random.choice(akimlar_list)
             filozof = _get_random_filozof(akim, exclude=recent_authors)
             if filozof not in recent_authors:
                 break
@@ -663,3 +753,4 @@ def _fallback_format(philosopher, akim, quotes_list):
     return """SOZ:\n%s\n---\nYAZAR:\n%s\n---\nAKIM:\n%s\n---\nHASHTAG:\n%s\n---\nACIKLAMA:\n%s'nin felsefi düşüncesinden önemli bir gözlem.\n---\nTWITTER:\n%s — %s""" % (
         secim, philosopher, akim, hashtags, philosopher, secim, philosopher
     )
+
