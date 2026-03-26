@@ -835,7 +835,17 @@ KONULAR = [
 
 
 def _load_recent_authors(n=15):
-    """Son n paylaşımdan yazar setini döndür."""
+    """Son n paylaşımdan yazar setini döndür. DB varsa oradan, yoksa posted.json'dan."""
+    if DB_AVAILABLE:
+        try:
+            rows = db_query(
+                "SELECT filozof_ad FROM yayinlar ORDER BY yayinlandi_at DESC LIMIT %s", (n,)
+            )
+            if rows is not None:
+                return set(r["filozof_ad"] for r in rows if r["filozof_ad"])
+        except Exception as e:
+            log.warning("DB recent_authors hatası: %s" % e)
+    # Fallback: posted.json
     try:
         pf = Path("posted.json")
         if not pf.exists():
@@ -846,7 +856,17 @@ def _load_recent_authors(n=15):
         return set()
 
 def _load_recent_quotes(n=30):
-    """Son n paylaşımdan söz setini döndür (ilk 60 karakter)."""
+    """Son n paylaşımdan söz setini döndür. DB varsa oradan, yoksa posted.json'dan."""
+    if DB_AVAILABLE:
+        try:
+            rows = db_query(
+                "SELECT soz_ozet FROM yayinlar ORDER BY yayinlandi_at DESC LIMIT %s", (n,)
+            )
+            if rows is not None:
+                return set(r["soz_ozet"] for r in rows if r["soz_ozet"])
+        except Exception as e:
+            log.warning("DB recent_quotes hatası: %s" % e)
+    # Fallback: posted.json
     try:
         pf = Path("posted.json")
         if not pf.exists():
@@ -855,6 +875,48 @@ def _load_recent_quotes(n=30):
         return set(p.get("quote", "")[:60] for p in posted[-n:])
     except Exception:
         return set()
+
+def _get_akimlar():
+    """AKIMLAR listesini DB'den veya Python listesinden al."""
+    if DB_AVAILABLE:
+        try:
+            rows = db_query("SELECT ad FROM akimlar ORDER BY RAND()")
+            if rows:
+                return [r["ad"] for r in rows]
+        except Exception as e:
+            log.warning("DB akimlar hatası: %s" % e)
+    return AKIMLAR
+
+def _get_random_filozof(akim, exclude=None):
+    """Akıma göre rastgele filozof seç. DB varsa oradan al."""
+    exclude = exclude or set()
+    if DB_AVAILABLE:
+        try:
+            rows = db_query(
+                "SELECT ad FROM filozoflar WHERE akim = %s ORDER BY RAND() LIMIT 20", (akim,)
+            )
+            if rows:
+                candidates = [r["ad"] for r in rows if r["ad"] not in exclude]
+                if candidates:
+                    return random.choice(candidates)
+        except Exception as e:
+            log.warning("DB filozof hatası: %s" % e)
+    # Fallback: Python listesi
+    candidates = [f for f in FILOZOFLAR.get(akim, []) if f not in exclude]
+    if candidates:
+        return random.choice(candidates)
+    return random.choice(FILOZOFLAR.get("Antik Yunan ve Ön-Sokratikler", ["Sokrates"]))
+
+def _get_random_konu():
+    """Rastgele konu seç. DB varsa oradan al."""
+    if DB_AVAILABLE:
+        try:
+            row = db_query("SELECT konu FROM konular ORDER BY RAND() LIMIT 1", fetchone=True)
+            if row:
+                return row["konu"]
+        except Exception as e:
+            log.warning("DB konu hatası: %s" % e)
+    return random.choice(KONULAR)
 
 def generate_quote():
     bugun = datetime.now()
@@ -883,15 +945,13 @@ def generate_quote():
         recent_authors = _load_recent_authors(15)
         recent_quotes  = _load_recent_quotes(30)
         # Son 15 paylaşımda olmayan bir yazar seç
+        akimlar_list = _get_akimlar()
         for _ in range(20):
-            akim = random.choice(AKIMLAR)
-            if akim in FILOZOFLAR and FILOZOFLAR[akim] and random.random() < 0.8:
-                filozof = random.choice(FILOZOFLAR[akim])
-            else:
-                filozof = random.choice(FILOZOFLAR.get("Antik Yunan Felsefesi", ["Sokrates"]))
+            akim = random.choice(akimlar_list)
+            filozof = _get_random_filozof(akim, exclude=recent_authors)
             if filozof not in recent_authors:
                 break
-        konu = random.choice(KONULAR)
+        konu = _get_random_konu()
         log.info("Secilen filozof: %s" % filozof)
 
     MAX_DENEME = 8
@@ -914,14 +974,11 @@ def generate_quote():
 
         log.warning("Soz bulunamadi: %s (%d/%d)" % (filozof, deneme+1, MAX_DENEME))
         for _ in range(10):
-            akim = random.choice(AKIMLAR)
-            if akim in FILOZOFLAR and FILOZOFLAR[akim]:
-                filozof = random.choice(FILOZOFLAR[akim])
-            else:
-                filozof = random.choice(FILOZOFLAR.get("Antik Yunan Felsefesi", ["Sokrates"]))
+            akim = random.choice(akimlar_list)
+            filozof = _get_random_filozof(akim, exclude=recent_authors)
             if filozof not in recent_authors:
                 break
-        konu = random.choice(KONULAR)
+        konu = _get_random_konu()
 
     log.error("8 denemede de gercek soz bulunamadi.")
     return None
