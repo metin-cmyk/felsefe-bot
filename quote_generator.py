@@ -655,3 +655,4 @@ def _fallback_format(philosopher, akim, quotes_list):
     return """SOZ:\n%s\n---\nYAZAR:\n%s\n---\nAKIM:\n%s\n---\nHASHTAG:\n%s\n---\nACIKLAMA:\n%s'nin felsefi düşüncesinden önemli bir gözlem.\n---\nTWITTER:\n%s — %s""" % (
         secim, philosopher, akim, hashtags, philosopher, secim, philosopher
     )
+
