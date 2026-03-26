@@ -2,10 +2,5 @@ anthropic>=0.40.0
 schedule>=1.2.0
 requests>=2.31.0
 Pillow>=10.0.0
-numpy>=1.24.0
-tweepy>=4.14.0
-flask
-schedule
-requests
-Pillow
-anthropic
+flask>=2.0.0
+pymysql>=1.1.0
