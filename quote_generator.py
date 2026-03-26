@@ -3,7 +3,7 @@ import os, re, random, logging, json, time
 from datetime import datetime
 from pathlib import Path
 import anthropic
-import google.generativeai as genai
+from google import genai
 
 try:
     from db import query as db_query, execute as db_execute
@@ -31,10 +31,9 @@ except Exception as _e:
     log.warning("Claude istemcisi baslatilamadi: %s" % _e)
 
 try:
-    genai.configure(api_key=os.environ.get("GEMINI_API_KEY"))
-    gemini_model = genai.GenerativeModel('gemini-1.5-pro')
+    gemini_client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
 except Exception as _e:
-    gemini_model = None
+    gemini_client = None
     log.warning("Gemini istemcisi baslatilamadi: %s" % _e)
 
 # ---------------------------------------------------------------------------
@@ -297,6 +296,7 @@ TWITTER:
 
     prompt_content = f"Dusunur: {philosopher}\nAkim: {akim}\nKonu: {konu}\n\nGERCEK sozler listesi:\n{quotes_text}"
 
+    # 1. Claude
     if claude_client:
         try:
             msg = claude_client.messages.create(
@@ -307,13 +307,18 @@ TWITTER:
         except Exception as e:
             log.warning("Claude API hatasi: %s. Gemini'ye geciliyor..." % e)
 
-    if gemini_model:
+    # 2. Gemini (Yeni Kütüphane)
+    if gemini_client:
         try:
-            response = gemini_model.generate_content(f"{system_instruction}\n\n{prompt_content}")
+            response = gemini_client.models.generate_content(
+                model='gemini-2.0-flash',
+                contents=f"{system_instruction}\n\n{prompt_content}"
+            )
             return response.text.strip()
         except Exception as e:
             log.warning("Gemini API hatasi: %s. Fallback'e geciliyor..." % e)
 
+    # 3. Fallback
     log.warning("Her iki AI de basarisiz, manuel secim yapiliyor.")
     result = _fallback_format(philosopher, akim, quotes_list)
     return result or ""
@@ -384,61 +389,4 @@ def _fetch_goodreads(philosopher):
                     quote_text = lines[0].strip('""\u201c\u201d\u2018\u2019').strip()
                     if 25 < len(quote_text) < 400: quotes.append(quote_text)
             if quotes: return quotes[:20]
-    except Exception: pass
-    return []
-
-def _fetch_felsefe_gen_tr(philosopher):
-    import requests as _req, html as _html
-    from urllib.parse import quote as _uq
-    try:
-        r = _req.get("https://felsefe.gen.tr/?s=%s" % _uq(philosopher), headers={"User-Agent": "Mozilla/5.0"}, timeout=10)
-        if r.status_code == 200:
-            quotes = [_html.unescape(re.sub(r"<[^>]+>", "", q)).strip() for q in re.findall(r'<blockquote[^>]*>(.*?)</blockquote>', r.text, re.DOTALL)]
-            quotes = [q for q in quotes if 25 < len(q) < 400]
-            if quotes: return quotes[:15]
-    except Exception: pass
-    return []
-
-def _fetch_real_quotes_from_wikipedia(philosopher):
-    quotes = _fetch_wikiquote(philosopher)
-    if quotes: return quotes, "wikiquote"
-    quotes = _fetch_azquotes(philosopher)
-    if quotes: return quotes, "azquotes"
-    quotes = _fetch_goodreads(philosopher)
-    if quotes: return quotes, "goodreads"
-    quotes = _fetch_felsefe_gen_tr(philosopher)
-    if quotes: return quotes, "felsefe.gen.tr"
-    return [], "none"
-
-def _is_turkish(text):
-    if not text or len(text.strip()) < 5: return False
-    words = set(text.lower().split())
-    
-    foreign_checks = [
-        ({"der","die","das","und","oder","aber","nicht","ist","sind"}, 2),
-        ({"the","a","an","is","are","was","were","have","has","and","or","but","not"}, 3),
-        ({"le","la","les","un","une","et","ou","mais","est","sont"}, 2),
-    ]
-    for word_set, threshold in foreign_checks:
-        if len(words & word_set) >= threshold: return False
-
-    turkce_chars = set("çşğüöıÇŞĞÜÖİ")
-    if any(c in text for c in turkce_chars): return True
-
-    turkce_words = {"ve","bir","bu","da","de","ile","için","ama","çünkü","eğer","olan","değil","gibi","kadar","daha","çok","her","biz","ben","sen","var","yok"}
-    if len(words & turkce_words) >= 2: return True
-    return False
-
-def _fallback_format(philosopher, akim, quotes_list):
-    if not quotes_list: return ""
-    turkce_sozler = [q for q in quotes_list if _is_turkish(q)]
-    if not turkce_sozler: return ""
-    turkce_sozler.sort(key=len)
-    secim = re.sub(r'[""\u201c\u201d\u2018\u2019«»\']', "", turkce_sozler[0]).strip()[:250]
-    if len(secim) < 15: return ""
-
-    akim_tag = re.sub(r"[^a-zA-Z0-9]", "", akim.split("/")[0].strip())
-    yt_tag = re.sub(r"[^a-zA-Z0-9]", "", (philosopher.split()[-1] if philosopher else "Felsefe"))
-    hashtags = f"#Felsefe #Bilgelik #{akim_tag} #{yt_tag} #DusunenInsan"
-
-    return f"SOZ:\n{secim}\n---\nYAZAR:\n{philosopher}\n---\nAKIM:\n{akim}\n---\nHASHTAG:\n{hashtags}\n---\nACIKLAMA:\n{philosopher}'nin felsefi düşüncesinden önemli bir gözlem.\n---\nTWITTER:\n{secim} — {philosopher}"
+    except
