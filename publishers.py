@@ -29,8 +29,8 @@ except Exception as e:
     log.warning("Gemini istemcisi baslatilamadi: %s" % e)
 
 
-def _ai_generate(prompt, max_tokens=800):
-    """Önce Claude'u dener, hata verirse (kredi vb.) Gemini'ye geçer."""
+def _ai_generate(prompt, max_tokens=2000):
+    """Önce Claude'u dener, hata verirse Gemini'ye geçer. 429 Kota hatasında bekler."""
     # 1. Claude'u Dene
     if claude_client:
         try:
@@ -41,20 +41,28 @@ def _ai_generate(prompt, max_tokens=800):
             )
             return msg.content[0].text.strip()
         except Exception as e:
-            log.warning("Claude API hatasi (Gemini'ye geciliyor...): %s" % e)
+            log.warning("Claude API hatasi: %s" % e)
             
-    # 2. Gemini'yi Dene (Yeni GenAI SDK)
+    # 2. Gemini'yi Dene (Rate Limit Korumalı)
     if gemini_client:
-        try:
-            response = gemini_client.models.generate_content(
-                model='gemini-2.0-flash',
-                contents=prompt,
-            )
-            return response.text.strip()
-        except Exception as e:
-            log.error("Gemini API hatasi: %s" % e)
+        for attempt in range(3): # 3 kere şansını dener
+            try:
+                response = gemini_client.models.generate_content(
+                    model='gemini-2.0-flash',
+                    contents=prompt,
+                )
+                return response.text.strip()
+            except Exception as e:
+                err_str = str(e).lower()
+                # Eğer kota/limit (429) hatası yerse pes etme, 25 saniye bekle ve tekrar dene
+                if "429" in err_str or "quota" in err_str or "exhausted" in err_str:
+                    log.warning(f"Gemini API Kota Sınırı (429). 25 saniye bekleniyor... (Deneme {attempt+1}/3)")
+                    time.sleep(25)
+                else:
+                    log.error("Gemini API genel hatasi: %s" % e)
+                    break
             
-    # 3. İkisi de çökerse
+    # 3. İkisi de tamamen çökerse
     return ""
 
 # ---------------------------------------------------------------------------
@@ -202,16 +210,30 @@ def _build_content(quote_data):
     return html_content
 
 def _build_aciklama(quote_data):
+    """SEO odaklı, çok uzun ve alt başlıklı felsefi makale üretimi."""
     soz, yazar, akim = quote_data.get("quote", ""), quote_data.get("author", "Anonim"), quote_data.get("akim", "Felsefe")
+    
     prompt = (
-        f"Sen derinlikli yazılar yazan bir felsefe editörüsün. Şu felsefi sözü son derece detaylı bir şekilde analiz et.\n\n"
-        f"Söz: '{soz}'\nYazar: {yazar}\nAkım: {akim}\n\n"
-        f"GÖREVİN: Bu sözün altında yatan felsefi derinliği, yazarın genel düşünce sistemi içindeki yerini ve günümüz dünyasındaki varoluşsal karşılığını incele. "
-        f"Okuyucuyu düşünmeye sevk eden, edebi bir dille yazılmış, EN AZ 3-4 UZUN PARAGRAFTAN oluşan çok kapsamlı bir makale oluştur. "
-        f"Kısa cevaplar verme; adeta bir felsefe dergisine başyazı hazırlıyormuşsun gibi derinlikli yaz."
+        f"Sen uzman bir SEO içerik yazarı ve derinlikli yazılar kaleme alan bir felsefe editörüsün. "
+        f"Aşağıdaki sözü, arama motorlarında (Google) organik trafik çekecek SEO kurallarına uygun şekilde, ancak edebi ve felsefi derinliğini asla kaybetmeden çok detaylıca analiz et.\n\n"
+        f"Söz: '{soz}'\n"
+        f"Yazar: {yazar}\n"
+        f"Akım: {akim}\n\n"
+        f"GÖREVİN VE KURALLAR:\n"
+        f"1. SEO UYUMU: Yazının içinde '{yazar} sözleri', '{akim} felsefesi', 'felsefi sözler', 'hayata dair sözler' gibi anahtar kelimeleri okuyucuyu rahatsız etmeden, doğal bir şekilde geçir.\n"
+        f"2. ÇOK UZUN İÇERİK: Bu sıradan bir yorum değil, adeta bir blog yazısı/makale olmalı. EN AZ 5-6 UZUN PARAGRAFTAN (minimum 500 kelime) oluşmalı.\n"
+        f"3. ALT BAŞLIKLAR: Metni 2 veya 3 mantıklı alt başlığa böl (Örn: {yazar}'ın Düşünce Dünyası, Modern İnsan İçin Anlamı vb.).\n"
+        f"4. FELSEFİ DERİNLİK: Sözün altında yatan varoluşsal krizi, yazarın düşünce sistemindeki yerini ve günümüz psikolojisindeki karşılığını edebi bir dille incele.\n"
+        f"5. Sadece makaleyi yaz, bana 'İşte makaleniz' gibi giriş cümleleri kurma."
     )
-    editor = _ai_generate(prompt, max_tokens=1200)
-    return editor or quote_data.get("aciklama", f"{akim} felsefesinin bu sözü, modern insanın varoluşsal sorularına ışık tutmaktadır.")
+    
+    editor = _ai_generate(prompt, max_tokens=2500)
+    
+    if not editor:
+        log.warning("Makale üretilemedi, yedek metin kullanılıyor.")
+        return f"{akim} felsefesinin bu güçlü sözü, modern insanın varoluşsal sorularına ve yaşam mücadelesine ışık tutmaktadır. {yazar}'ın düşünce dünyasını anlamak için önemli bir adımdır."
+        
+    return editor
 
 # ---------------------------------------------------------------------------
 # WordPress Yükleme ve Silme
