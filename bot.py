@@ -1,234 +1,111 @@
-import os, json, logging, schedule, time, threading, queue
-try:
-    from db import execute as db_execute, test_connection
-    DB_AVAILABLE = True
-except ImportError:
-    DB_AVAILABLE = False
-from pathlib import Path
-from datetime import datetime
-from flask import Flask
+# -*- coding: utf-8 -*-
+"""
+Veritabanı bağlantı modülü — felsefemiz.net
+Railway env variables üzerinden bağlanır.
+"""
+import os, logging, time
+import pymysql
+import pymysql.cursors
 
-from quote_generator import generate_quote
-from image_generator import create_post_image, create_story_image
-from publishers import post_to_wordpress, delete_from_wordpress
-from telegram_sender import send_notification, start_listener, _send_msg
-
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s",
-    handlers=[logging.FileHandler("bot.log", encoding="utf-8"), logging.StreamHandler()]
-)
 log = logging.getLogger(__name__)
 
-POSTED_FILE = Path("posted.json")
+def _get_db_config():
+    """DB bağlantı ayarlarını environment variables'dan al."""
+    host     = os.environ.get("DB_HOST",     "mt-pony.guzelhosting.com")
+    port     = int(os.environ.get("DB_PORT", "3306"))
+    user     = os.environ.get("DB_USER",     "sere6176_felsefemizdata")
+    password = os.environ.get("DB_PASSWORD", "NeMutluTürkümDiyene@1923")
+    dbname   = os.environ.get("DB_NAME",     "sere6176_felsefemizdata")
+    return {
+        "host":        host,
+        "port":        port,
+        "user":        user,
+        "password":    password,
+        "db":          dbname,
+        "charset":     "utf8mb4",
+        "cursorclass": pymysql.cursors.DictCursor,
+        "connect_timeout": 15,
+        "read_timeout":    30,
+        "write_timeout":   30,
+        "autocommit":  True,
+        "ssl_disabled": True,  # cPanel MySQL SSL gerektirmez
+    }
 
-# ---------------------------------------------------------------------------
-# KEEP ALIVE (PING) SUNUCUSU
-# ---------------------------------------------------------------------------
-app = Flask(__name__)
+DB_CONFIG = _get_db_config()
 
-@app.route('/')
-def home():
-    return "Felsefemiz Bot 7/24 Ayakta ve Calisiyor!"
+_conn = None
 
-def run_server():
-    # Railway'in atadığı portu otomatik alır, bulamazsa 8080 kullanır
-    port = int(os.environ.get("PORT", 8080))
-    # log çıkışını kapatmak için werkzeug log seviyesini error yapıyoruz
-    log = logging.getLogger('werkzeug')
-    log.setLevel(logging.ERROR)
-    app.run(host='0.0.0.0', port=port)
-
-def keep_alive():
-    server_thread = threading.Thread(target=run_server, daemon=True)
-    server_thread.start()
-    log.info("Ping sunucusu baslatildi.")
-
-# ---------------------------------------------------------------------------
-# Sıralı yayın kuyruğu — tüm içerikler buradan geçer, sırayla işlenir
-# ---------------------------------------------------------------------------
-_publish_queue = queue.Queue()
-_queue_worker_started = False
-
-def _queue_worker():
-    """Tek thread, sırayla çalışır. API rate limit gelirse bekler."""
-    log.info("Kuyruk worker baslatildi.")
-    while True:
-        try:
-            item = _publish_queue.get(timeout=5)
-            if item is None:
-                break
-            quote_data, post_img, story_img = item
-            _do_publish(quote_data, post_img, story_img)
-            _publish_queue.task_done()
-            # İçerikler arası bekleme — WP API rate limit önlemi
-            time.sleep(15)
-        except queue.Empty:
-            continue
-        except Exception as e:
-            log.error("Kuyruk worker hatasi: %s" % e, exc_info=True)
-            _publish_queue.task_done()
-
-def start_queue_worker():
-    global _queue_worker_started
-    if not _queue_worker_started:
-        t = threading.Thread(target=_queue_worker, daemon=True)
-        t.start()
-        _queue_worker_started = True
-        log.info("Kuyruk worker thread basladi.")
-
-def enqueue(quote_data, post_img, story_img):
-    """İçeriği yayın kuyruğuna ekle."""
-    _publish_queue.put((quote_data, post_img, story_img))
-    log.info("Kuyruga eklendi: %s (kuyruk boyutu: %d)" % (
-        quote_data["author"], _publish_queue.qsize()))
-
-# ---------------------------------------------------------------------------
-# Asıl yayın işlemi — retry mekanizması ile
-# ---------------------------------------------------------------------------
-
-def _do_publish(quote_data, post_img, story_img):
-    """WordPress'e yayınlar. Başarısızsa 3 kez daha dener."""
-    author = quote_data.get("author", "?")
-    log.info("Yayinlaniyor: %s" % author)
-
-    MAX_RETRY = 4
-    RETRY_WAIT = [20, 60, 120, 300]  # saniye — WP API rate limit için
-
-    for attempt in range(MAX_RETRY):
-        try:
-            url, post_id, media_id = post_to_wordpress(quote_data, post_img)
-
-            if url and post_id:
-                # Başarılı — kaydet ve bildir
-                _save_posted(quote_data, url, post_id, media_id)
-                send_notification(
-                    post_img=post_img,
-                    story_img=story_img,
-                    quote_data=quote_data,
-                    wp_result={"url": url, "post_id": post_id, "media_id": media_id},
-                )
-                log.info("Yayinlandi (%d. deneme): %s" % (attempt + 1, url))
-                return
-
-            else:
-                log.warning("Yayinlama bos dondü (deneme %d/%d)" % (attempt + 1, MAX_RETRY))
-
-        except Exception as e:
-            log.error("Yayinlama hatasi (deneme %d/%d): %s" % (attempt + 1, MAX_RETRY, e))
-
-        if attempt < MAX_RETRY - 1:
-            wait = RETRY_WAIT[attempt]
-            log.info("API hatasi — %d saniye sessizce bekleniyor... (%s)" % (wait, author))
-            time.sleep(wait)
-
-    # Tüm denemeler başarısız — sadece o zaman Telegram'a bildir
-    log.error("TUM DENEMELER BASARISIZ: %s" % author)
-    _send_msg("❌ %s yayınlanamadı, loglara bakın." % author)
-
-# ---------------------------------------------------------------------------
-# Kayıt
-# ---------------------------------------------------------------------------
-
-def _save_posted(quote_data, url, post_id, media_id):
-    # 1. DB'ye kaydet
-    if DB_AVAILABLE:
-        try:
-            db_execute(
-                "INSERT INTO yayinlar (filozof_ad, soz_ozet, wp_post_id, wp_media_id, wp_url) "
-                "VALUES (%s, %s, %s, %s, %s)",
-                (
-                    quote_data.get("author", ""),
-                    quote_data.get("quote", "")[:60],
-                    post_id,
-                    media_id,
-                    url,
-                )
-            )
-            log.info("DB'ye kaydedildi: %s" % quote_data.get("author", ""))
-        except Exception as e:
-            log.error("DB kayit hatasi: %s" % e)
-    # 2. Yedek: posted.json da tut
+def get_conn():
+    """Bağlantı al — kopuksa yeniden bağlan."""
+    global _conn
     try:
-        posted = []
-        if POSTED_FILE.exists():
-            posted = json.loads(POSTED_FILE.read_text(encoding="utf-8"))
-        posted.append({
-            "quote":    quote_data["quote"],
-            "author":   quote_data["author"],
-            "time":     datetime.now().isoformat(),
-            "wp_url":   url,
-            "post_id":  post_id,
-            "media_id": media_id,
-        })
-        POSTED_FILE.write_text(json.dumps(posted, ensure_ascii=False, indent=2), encoding="utf-8")
-    except Exception as e:
-        log.error("JSON kayit hatasi: %s" % e)
-
-# ---------------------------------------------------------------------------
-# Üretim — sadece üretir, kuyruğa ekler
-# ---------------------------------------------------------------------------
-
-def produce_and_enqueue():
-    """Söz üretir, görsel yapar, kuyruğa ekler."""
+        if _conn and _conn.open:
+            _conn.ping(reconnect=True)
+            return _conn
+    except Exception:
+        _conn = None
     try:
-        quote_data = generate_quote()
-        if not quote_data:
-            log.warning("Gercek soz bulunamadi, atlaniyor.")
-            _send_msg("⚠️ Gerçek söz bulunamadı. /yeni ile tekrar deneyin.")
-            return False
-
-        log.info("Soz uretildi: %s — %s" % (quote_data["author"], quote_data["quote"][:40]))
-        post_img, palette = create_post_image(quote_data)
-        story_img = create_story_image(quote_data, palette)
-        enqueue(quote_data, post_img, story_img)
-        return True
-
-    except Exception as e:
-        log.error("Uretim hatasi: %s" % e, exc_info=True)
-        return False
-
-# ---------------------------------------------------------------------------
-# Zamanlayıcı
-# ---------------------------------------------------------------------------
-
-def run():
-    hour = datetime.now().hour
-    if hour < 8 or hour >= 23:
-        log.info("Gece modu, atlaniyor.")
-        return
-    log.info("--- Zamanlamali uretim ---")
-    produce_and_enqueue()
-
-# ---------------------------------------------------------------------------
-# Main
-# ---------------------------------------------------------------------------
-
-def main():
-    log.info("Felsefemiz Bot basliyor...")
-
-    # DB bağlantısını test et
-    if DB_AVAILABLE:
-        if test_connection():
-            log.info("Veritabani baglantisi basarili!")
+        cfg = _get_db_config()  # Her bağlantıda env'den taze oku
+        _conn = pymysql.connect(**cfg)
+        log.info("DB bağlantısı kuruldu: %s@%s/%s" % (
+            cfg["user"], cfg["host"], cfg["db"]))
+        return _conn
+    except pymysql.err.OperationalError as e:
+        errno = e.args[0] if e.args else 0
+        if errno == 1045:
+            log.error("DB Erisim reddedildi (1045) — kullanici/sifre yanlis!")
+        elif errno == 2003:
+            log.error("DB baglanti zaman asimi (2003) — host/port kontrol edin: %s:%s" % (
+                os.environ.get("DB_HOST","?"), os.environ.get("DB_PORT","?")))
         else:
-            log.warning("Veritabani baglantisi basarisiz — Python listesiyle devam edilecek.")
-    
-    # 1. Ping sunucusunu başlat
-    keep_alive()
-    
-    start_queue_worker()
-    start_listener()
+            log.error("DB baglanti hatasi (%s): %s" % (errno, e))
+        return None
+    except Exception as e:
+        log.error("DB beklenmedik hata: %s" % e)
+        return None
 
-    schedule.every().hour.at(":00").do(run)
+def query(sql, params=None, fetchone=False):
+    """SELECT sorgusu — liste veya tek satır döner."""
+    for attempt in range(3):
+        conn = get_conn()
+        if not conn:
+            time.sleep(2)
+            continue
+        try:
+            with conn.cursor() as cur:
+                cur.execute(sql, params or ())
+                return cur.fetchone() if fetchone else cur.fetchall()
+        except pymysql.OperationalError:
+            _conn = None
+            time.sleep(2)
+        except Exception as e:
+            log.error("DB query hatası: %s | SQL: %s" % (e, sql[:100]))
+            return None
+    return None
 
-    if os.getenv("RUN_NOW", "false").lower() == "true":
-        run()
+def execute(sql, params=None):
+    """INSERT/UPDATE/DELETE — lastrowid döner."""
+    for attempt in range(3):
+        conn = get_conn()
+        if not conn:
+            time.sleep(2)
+            continue
+        try:
+            with conn.cursor() as cur:
+                cur.execute(sql, params or ())
+                return cur.lastrowid
+        except pymysql.OperationalError:
+            _conn = None
+            time.sleep(2)
+        except Exception as e:
+            log.error("DB execute hatası: %s | SQL: %s" % (e, sql[:100]))
+            return None
+    return None
 
-    log.info("Bot aktif. Saat baslarini bekliyor...")
-    while True:
-        schedule.run_pending()
-        time.sleep(30)
-
-if __name__ == "__main__":
-    main()
+def test_connection():
+    """Bağlantıyı test et."""
+    result = query("SELECT COUNT(*) as c FROM akimlar", fetchone=True)
+    if result:
+        log.info("DB test OK — akimlar: %d" % result["c"])
+        return True
+    return False
