@@ -888,22 +888,59 @@ TWITTER:
             if attempt < 2:
                 time.sleep(10)
 
-    # Claude basarisiz — fallback ile dogrudan listeden sec
-    log.warning("Claude API basarisiz, fallback: %s" % philosopher)
-    return _fallback_format(philosopher, akim, quotes_list)
+    # Claude basarisiz — fallback ile dogrudan listeden sec (sadece Turkce)
+    log.warning("Claude API basarisiz, fallback deneniyor: %s" % philosopher)
+    result = _fallback_format(philosopher, akim, quotes_list)
+    if result:
+        return result
+    # Turkce soz bulunamadi — bos don, generate_quote baska filozof dener
+    return ""
+
+
+def _is_turkish(text):
+    """Metnin Türkçe olup olmadığını kontrol eder."""
+    turkce_chars = set("çşğüöıÇŞĞÜÖİ")
+    turkce_words = {"ve", "bir", "bu", "da", "de", "ile", "için", "ama", "çünkü",
+                    "olan", "olan", "değil", "gibi", "kadar", "daha", "çok",
+                    "her", "biz", "ben", "sen", "onlar", "var", "yok", "ne"}
+    # Türkçe karakter içeriyorsa Türkçe
+    if any(c in text for c in turkce_chars):
+        return True
+    # Yaygın Türkçe kelimeler içeriyorsa Türkçe
+    words = set(text.lower().split())
+    if len(words & turkce_words) >= 2:
+        return True
+    return False
 
 
 def _fallback_format(philosopher, akim, quotes_list):
-    """Claude API basarisiz olduğunda listeden dogrudan soz secer ve formatlar."""
+    """
+    Claude API basarisiz olduğunda listeden Türkçe söz secer ve formatlar.
+    İngilizce söz varsa ASLA paylaşmaz — boş döner, başka filozof denenir.
+    """
     if not quotes_list:
         return ""
-    # Türkçe karakter içerenleri tercih et
-    turkce = [q for q in quotes_list if any(c in q for c in "çşğüöıÇŞĞÜÖİ")]
-    secim  = turkce[0] if turkce else quotes_list[0]
-    secim  = re.sub(r'[""\u201c\u201d\u2018\u2019«»\']', "", secim).strip()[:250]
+
+    # Sadece Türkçe sözleri al
+    turkce_sozler = [q for q in quotes_list if _is_turkish(q)]
+
+    if not turkce_sozler:
+        # Türkçe söz yok — bu filozofu atla, boş dön
+        log.warning("Fallback: Turkce soz bulunamadi (%s), atlanıyor." % philosopher)
+        return ""
+
+    # En kısa ve temiz Türkçe sözü seç (uzun sözler görsele sığmayabilir)
+    turkce_sozler.sort(key=len)
+    secim = turkce_sozler[0]
+    secim = re.sub(r'[""\u201c\u201d\u2018\u2019«»\']', "", secim).strip()[:250]
+
+    if len(secim) < 15:
+        return ""
+
     akim_tag = re.sub(r"[^a-zA-Z0-9]", "", akim.split("/")[0].strip())
     yt_tag   = re.sub(r"[^a-zA-Z0-9]", "", (philosopher.split()[-1] if philosopher else "Felsefe"))
     hashtags = "#Felsefe #Bilgelik #%s #%s #DusunenInsan" % (akim_tag, yt_tag)
-    return """SOZ:\n%s\n---\nYAZAR:\n%s\n---\nAKIM:\n%s\n---\nHASHTAG:\n%s\n---\nACIKLAMA:\n%s felsefi düşüncesinden önemli bir gözlem.\n---\nTWITTER:\n%s — %s""" % (
+
+    return """SOZ:\n%s\n---\nYAZAR:\n%s\n---\nAKIM:\n%s\n---\nHASHTAG:\n%s\n---\nACIKLAMA:\n%s'nin felsefi düşüncesinden önemli bir gözlem.\n---\nTWITTER:\n%s — %s""" % (
         secim, philosopher, akim, hashtags, philosopher, secim, philosopher
     )
