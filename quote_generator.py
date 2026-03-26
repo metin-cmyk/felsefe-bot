@@ -117,7 +117,7 @@ def _load_recent_quotes(n=30):
         return set()
 
 def _get_akimlar():
-    """AKIMLAR listesini DB'den veya Python listesinden al."""
+    """AKIMLAR listesini DB'den al. DB yoksa minimal fallback."""
     if DB_AVAILABLE:
         try:
             rows = db_query("SELECT ad FROM akimlar ORDER BY RAND()")
@@ -125,7 +125,12 @@ def _get_akimlar():
                 return [r["ad"] for r in rows]
         except Exception as e:
             log.warning("DB akimlar hatası: %s" % e)
-    return AKIMLAR
+    # DB yoksa minimal fallback
+    return [
+        "Stoacılık", "Varoluşçuluk", "Antik Yunan Felsefesi",
+        "Budizm", "Rasyonalizm", "Empirizm", "Fenomenoloji",
+        "Absürdizm", "Pragmatizm", "Nihilizm", "Taoizm",
+    ]
 
 def _get_random_filozof(akim, exclude=None):
     """Akıma göre rastgele filozof seç. DB varsa oradan al."""
@@ -139,13 +144,24 @@ def _get_random_filozof(akim, exclude=None):
                 candidates = [r["ad"] for r in rows if r["ad"] not in exclude]
                 if candidates:
                     return random.choice(candidates)
+            # Akim bulunamadıysa herhangi bir filozofu dene
+            rows2 = db_query(
+                "SELECT ad FROM filozoflar ORDER BY RAND() LIMIT 20"
+            )
+            if rows2:
+                candidates2 = [r["ad"] for r in rows2 if r["ad"] not in exclude]
+                if candidates2:
+                    return random.choice(candidates2)
         except Exception as e:
             log.warning("DB filozof hatası: %s" % e)
-    # Fallback: Python listesi
-    candidates = [f for f in FILOZOFLAR.get(akim, []) if f not in exclude]
-    if candidates:
-        return random.choice(candidates)
-    return random.choice(FILOZOFLAR.get("Antik Yunan ve Ön-Sokratikler", ["Sokrates"]))
+    # DB yoksa minimal fallback
+    _fallback_filozoflar = [
+        "Sokrates", "Platon", "Aristoteles", "Marcus Aurelius", "Epiktetos",
+        "Friedrich Nietzsche", "Albert Camus", "Jean-Paul Sartre",
+        "Immanuel Kant", "Arthur Schopenhauer", "Seneca", "Epikür",
+    ]
+    candidates = [f for f in _fallback_filozoflar if f not in exclude]
+    return random.choice(candidates) if candidates else "Sokrates"
 
 def _get_random_konu():
     """Rastgele konu seç. DB varsa oradan al."""
@@ -156,7 +172,12 @@ def _get_random_konu():
                 return row["konu"]
         except Exception as e:
             log.warning("DB konu hatası: %s" % e)
-    return random.choice(KONULAR)
+    # DB yoksa minimal fallback
+    return random.choice([
+        "Hayatın anlamı ve özgürlük", "Ölüm ve varoluş",
+        "Aşk ve insan doğası", "Bilgi ve hakikat",
+        "Ahlak ve erdem", "Toplum ve birey",
+    ])
 
 def _db_get_unused_quote():
     """
