@@ -1,6 +1,14 @@
-import os, re, random, anthropic, logging
+import os, re, random, anthropic, logging, json
 from datetime import datetime
 from pathlib import Path
+
+try:
+    from db import query as db_query, execute as db_execute
+    DB_AVAILABLE = True
+except ImportError:
+    DB_AVAILABLE = False
+    db_query  = lambda *a, **k: None
+    db_execute= lambda *a, **k: None
 
 log = logging.getLogger(__name__)
 
@@ -655,4 +663,3 @@ def _fallback_format(philosopher, akim, quotes_list):
     return """SOZ:\n%s\n---\nYAZAR:\n%s\n---\nAKIM:\n%s\n---\nHASHTAG:\n%s\n---\nACIKLAMA:\n%s'nin felsefi düşüncesinden önemli bir gözlem.\n---\nTWITTER:\n%s — %s""" % (
         secim, philosopher, akim, hashtags, philosopher, secim, philosopher
     )
-
