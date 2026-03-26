@@ -84,7 +84,8 @@ def _load_recent_authors(n=15):
             log.warning("DB recent_authors hatası: %s" % e)
     try:
         pf = Path("posted.json")
-        if not pf.exists(): return set()
+        if not pf.exists(): 
+            return set()
         posted = json.loads(pf.read_text(encoding="utf-8"))
         return set(p.get("author", "") for p in posted[-n:])
     except Exception:
@@ -100,7 +101,8 @@ def _load_recent_quotes(n=30):
             log.warning("DB recent_quotes hatası: %s" % e)
     try:
         pf = Path("posted.json")
-        if not pf.exists(): return set()
+        if not pf.exists(): 
+            return set()
         posted = json.loads(pf.read_text(encoding="utf-8"))
         return set(p.get("quote", "")[:60] for p in posted[-n:])
     except Exception:
@@ -110,7 +112,8 @@ def _get_akimlar():
     if DB_AVAILABLE:
         try:
             rows = db_query("SELECT ad FROM akimlar ORDER BY RAND()")
-            if rows: return [r["ad"] for r in rows]
+            if rows: 
+                return [r["ad"] for r in rows]
         except Exception as e:
             log.warning("DB akimlar hatası: %s" % e)
     return ["Stoacılık", "Varoluşçuluk", "Antik Yunan Felsefesi", "Budizm", "Rasyonalizm", "Empirizm", "Fenomenoloji", "Absürdizm", "Pragmatizm", "Nihilizm", "Taoizm"]
@@ -122,28 +125,35 @@ def _get_random_filozof(akim, exclude=None):
             rows = db_query("SELECT ad FROM filozoflar WHERE akim = %s ORDER BY RAND() LIMIT 20", (akim,))
             if rows:
                 candidates = [r["ad"] for r in rows if r["ad"] not in exclude]
-                if candidates: return random.choice(candidates)
+                if candidates: 
+                    return random.choice(candidates)
             rows2 = db_query("SELECT ad FROM filozoflar ORDER BY RAND() LIMIT 20")
             if rows2:
                 candidates2 = [r["ad"] for r in rows2 if r["ad"] not in exclude]
-                if candidates2: return random.choice(candidates2)
+                if candidates2: 
+                    return random.choice(candidates2)
         except Exception as e:
             log.warning("DB filozof hatası: %s" % e)
     _fallback_filozoflar = ["Sokrates", "Platon", "Aristoteles", "Marcus Aurelius", "Epiktetos", "Friedrich Nietzsche", "Albert Camus", "Jean-Paul Sartre", "Immanuel Kant", "Arthur Schopenhauer", "Seneca", "Epikür"]
     candidates = [f for f in _fallback_filozoflar if f not in exclude]
-    return random.choice(candidates) if candidates else "Sokrates"
+    
+    if candidates:
+        return random.choice(candidates)
+    return "Sokrates"
 
 def _get_random_konu():
     if DB_AVAILABLE:
         try:
             row = db_query("SELECT konu FROM konular ORDER BY RAND() LIMIT 1", fetchone=True)
-            if row: return row["konu"]
+            if row: 
+                return row["konu"]
         except Exception as e:
             log.warning("DB konu hatası: %s" % e)
     return random.choice(["Hayatın anlamı ve özgürlük", "Ölüm ve varoluş", "Aşk ve insan doğası", "Bilgi ve hakikat", "Ahlak ve erdem", "Toplum ve birey"])
 
 def _db_get_unused_quote():
-    if not DB_AVAILABLE: return None
+    if not DB_AVAILABLE: 
+        return None
     try:
         recent_authors = _load_recent_authors(15)
         recent_quotes  = _load_recent_quotes(30)
@@ -156,15 +166,19 @@ def _db_get_unused_quote():
         )
         if not rows:
             rows = db_query("SELECT s.id, s.filozof_ad, s.soz, s.akim, s.hashtags, s.aciklama, s.kaynak FROM sozler s WHERE s.dil = 'tr' AND s.dogrulanmis = 1 AND s.filozof_ad != 'Mustafa Kemal Atatürk' ORDER BY RAND() LIMIT 10")
-        if not rows: return None
+        
+        if not rows: 
+            return None
 
         for row in rows:
-            if row["filozof_ad"] in recent_authors or row["soz"][:60] in recent_quotes: continue
+            if row["filozof_ad"] in recent_authors or row["soz"][:60] in recent_quotes: 
+                continue
             return {
                 "quote": row["soz"], "author": row["filozof_ad"], "akim": row["akim"] or "Felsefe",
                 "hashtags": row["hashtags"] or "#Felsefe #Bilgelik", "aciklama": row["aciklama"] or "",
                 "kaynak": row["kaynak"] or "", "twitter": row["soz"][:200] + " — " + row["filozof_ad"],
             }
+            
         row = rows[0]
         return {
             "quote": row["soz"], "author": row["filozof_ad"], "akim": row["akim"] or "Felsefe",
@@ -176,7 +190,8 @@ def _db_get_unused_quote():
         return None
 
 def _db_save_quote(result):
-    if not DB_AVAILABLE or not result: return
+    if not DB_AVAILABLE or not result: 
+        return
     try:
         db_execute(
             """INSERT IGNORE INTO sozler (filozof_ad, soz, akim, hashtags, aciklama, dil, dogrulanmis, kaynak_site)
@@ -193,7 +208,8 @@ def generate_quote():
     bugun = datetime.now()
     if (bugun.month == 11 and bugun.day == 10) or (bugun.month == 10 and bugun.day == 29) or (bugun.month == 8 and bugun.day == 30) or (bugun.month == 5 and bugun.day == 19) or (bugun.month == 4 and bugun.day == 23) or random.random() < 0.20:
         ataturk_sozu = _get_ataturk_quote()
-        if ataturk_sozu: return ataturk_sozu
+        if ataturk_sozu: 
+            return ataturk_sozu
 
     db_result = _db_get_unused_quote()
     if db_result:
@@ -208,7 +224,9 @@ def generate_quote():
     for _ in range(20):
         akim = random.choice(akimlar_list)
         filozof = _get_random_filozof(akim, exclude=recent_authors)
-        if filozof not in recent_authors: break
+        if filozof not in recent_authors: 
+            break
+            
     konu = _get_random_konu()
 
     MAX_DENEME = 8
@@ -220,7 +238,8 @@ def generate_quote():
 
         if real_quotes:
             filtered = [q for q in real_quotes if q[:60] not in recent_quotes]
-            if not filtered: filtered = real_quotes
+            if not filtered: 
+                filtered = real_quotes
 
             raw = _select_best_quote(filozof, akim, konu, filtered)
             result = _parse(raw, filozof, akim)
@@ -241,8 +260,10 @@ def generate_quote():
 def _clean_quotes(text):
     text = text.strip()
     for q in ['\u201c', '\u201d', '\u2018', '\u2019', '"', "'"]:
-        if text.startswith(q): text = text[1:]
-        if text.endswith(q): text = text[:-1]
+        if text.startswith(q): 
+            text = text[1:]
+        if text.endswith(q): 
+            text = text[:-1]
     return text.strip()
 
 def _parse(text, default_autor, default_akim):
@@ -251,10 +272,13 @@ def _parse(text, default_autor, default_akim):
         return m.group(1).strip() if m else ""
 
     quote = _clean_quotes(get("SOZ"))
-    if not quote or len(quote.strip()) < 10 or not _is_turkish(quote): return None
+    
+    if not quote or len(quote.strip()) < 10 or not _is_turkish(quote): 
+        return None
 
     author = get("YAZAR")
-    if not author or "az bilinen" in author.lower(): author = default_autor
+    if not author or "az bilinen" in author.lower(): 
+        author = default_autor
     
     return {
         "quote": quote, "author": author, "akim": get("AKIM") or default_akim,
@@ -342,14 +366,16 @@ def _fetch_wikiquote(philosopher):
         quotes = []
         for line in wikitext.split("\n"):
             s = line.strip()
-            if not s.startswith("*") or s.startswith("**"): continue
+            if not s.startswith("*") or s.startswith("**"): 
+                continue
             clean = s.lstrip("* ").strip()
             clean = re.sub(r"\[\[(?:[^|\]]*\|)?([^\]]+)\]\]", r"\1", clean)
             clean = re.sub(r"\{\{[^}]*\}\}", "", clean)
             clean = re.sub(r"<ref[^>]*>.*?</ref>", "", clean, flags=re.DOTALL)
             clean = re.sub(r"<[^>]+>", "", clean)
             clean = re.sub(r"('''|'')", "", clean).strip().strip('"').strip("\'").strip()
-            if 25 < len(clean) < 400: quotes.append(clean)
+            if 25 < len(clean) < 400: 
+                quotes.append(clean)
         return quotes
 
     name_variants = _name_variants(philosopher)
@@ -359,8 +385,9 @@ def _fetch_wikiquote(philosopher):
                 r = _req.get("https://%s.wikiquote.org/w/api.php" % lang, params={"action": "parse", "page": name, "prop": "wikitext", "format": "json"}, timeout=12)
                 if r.status_code == 200 and "error" not in r.json():
                     quotes = _parse_wikitext(r.json().get("parse", {}).get("wikitext", {}).get("*", ""))
-                    if quotes: return quotes[:25]
-            except Exception:
+                    if quotes: 
+                        return quotes[:25]
+            except Exception as e:
                 pass
     return []
 
@@ -371,8 +398,10 @@ def _fetch_azquotes(philosopher):
         r = _req.get("https://www.azquotes.com/author/%s" % slug, headers={"User-Agent": "Mozilla/5.0"}, timeout=12)
         if r.status_code == 200:
             quotes = [_html.unescape(q.strip()) for q in re.findall(r'<a[^>]+class="title"[^>]*>([^<]{20,350})</a>', r.text) if len(q.strip()) > 20]
-            if quotes: return quotes[:20]
-    except Exception: pass
+            if quotes: 
+                return quotes[:20]
+    except Exception as e:
+        pass
     return []
 
 def _fetch_goodreads(philosopher):
@@ -387,6 +416,86 @@ def _fetch_goodreads(philosopher):
                 lines = [l.strip() for l in text.split("\n") if l.strip()]
                 if lines:
                     quote_text = lines[0].strip('""\u201c\u201d\u2018\u2019').strip()
-                    if 25 < len(quote_text) < 400: quotes.append(quote_text)
-            if quotes: return quotes[:20]
-    except
+                    if 25 < len(quote_text) < 400: 
+                        quotes.append(quote_text)
+            if quotes: 
+                return quotes[:20]
+    except Exception as e:
+        pass
+    return []
+
+def _fetch_felsefe_gen_tr(philosopher):
+    import requests as _req, html as _html
+    from urllib.parse import quote as _uq
+    try:
+        r = _req.get("https://felsefe.gen.tr/?s=%s" % _uq(philosopher), headers={"User-Agent": "Mozilla/5.0"}, timeout=10)
+        if r.status_code == 200:
+            quotes = [_html.unescape(re.sub(r"<[^>]+>", "", q)).strip() for q in re.findall(r'<blockquote[^>]*>(.*?)</blockquote>', r.text, re.DOTALL)]
+            quotes = [q for q in quotes if 25 < len(q) < 400]
+            if quotes: 
+                return quotes[:15]
+    except Exception as e:
+        pass
+    return []
+
+def _fetch_real_quotes_from_wikipedia(philosopher):
+    quotes = _fetch_wikiquote(philosopher)
+    if quotes: 
+        return quotes, "wikiquote"
+    
+    quotes = _fetch_azquotes(philosopher)
+    if quotes: 
+        return quotes, "azquotes"
+        
+    quotes = _fetch_goodreads(philosopher)
+    if quotes: 
+        return quotes, "goodreads"
+        
+    quotes = _fetch_felsefe_gen_tr(philosopher)
+    if quotes: 
+        return quotes, "felsefe.gen.tr"
+        
+    return [], "none"
+
+def _is_turkish(text):
+    if not text or len(text.strip()) < 5: 
+        return False
+    words = set(text.lower().split())
+    
+    foreign_checks = [
+        ({"der","die","das","und","oder","aber","nicht","ist","sind"}, 2),
+        ({"the","a","an","is","are","was","were","have","has","and","or","but","not"}, 3),
+        ({"le","la","les","un","une","et","ou","mais","est","sont"}, 2),
+    ]
+    for word_set, threshold in foreign_checks:
+        if len(words & word_set) >= threshold: 
+            return False
+
+    turkce_chars = set("çşğüöıÇŞĞÜÖİ")
+    if any(c in text for c in turkce_chars): 
+        return True
+
+    turkce_words = {"ve","bir","bu","da","de","ile","için","ama","çünkü","eğer","olan","değil","gibi","kadar","daha","çok","her","biz","ben","sen","var","yok"}
+    if len(words & turkce_words) >= 2: 
+        return True
+        
+    return False
+
+def _fallback_format(philosopher, akim, quotes_list):
+    if not quotes_list: 
+        return ""
+    turkce_sozler = [q for q in quotes_list if _is_turkish(q)]
+    if not turkce_sozler: 
+        return ""
+        
+    turkce_sozler.sort(key=len)
+    secim = re.sub(r'[""\u201c\u201d\u2018\u2019«»\']', "", turkce_sozler[0]).strip()[:250]
+    
+    if len(secim) < 15: 
+        return ""
+
+    akim_tag = re.sub(r"[^a-zA-Z0-9]", "", akim.split("/")[0].strip())
+    yt_tag = re.sub(r"[^a-zA-Z0-9]", "", (philosopher.split()[-1] if philosopher else "Felsefe"))
+    hashtags = f"#Felsefe #Bilgelik #{akim_tag} #{yt_tag} #DusunenInsan"
+
+    return f"SOZ:\n{secim}\n---\nYAZAR:\n{philosopher}\n---\nAKIM:\n{akim}\n---\nHASHTAG:\n{hashtags}\n---\nACIKLAMA:\n{philosopher}'nin felsefi düşüncesinden önemli bir gözlem.\n---\nTWITTER:\n{secim} — {philosopher}"
