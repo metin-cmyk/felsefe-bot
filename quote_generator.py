@@ -945,6 +945,11 @@ def _parse(text, default_autor, default_akim):
         log.warning("Parse sonucu bos soz geldi, atlaniyor.")
         return None
 
+    # Yabancı dil kontrolü — Türkçe değilse None dön
+    if not _is_turkish(quote):
+        log.warning("Parse sonucu yabanci dil sozü geldi, atlaniyor: %s" % quote[:50])
+        return None
+
     author = get("YAZAR")
     if not author or "az bilinen" in author.lower():
         author = default_autor if "az bilinen" not in default_autor.lower() else "Anonim Bilge"
@@ -1163,21 +1168,22 @@ def _select_best_quote(philosopher, akim, konu, quotes_list):
     quotes_text = "\n".join(["  %d. %s" % (i+1, q) for i, q in enumerate(quotes_list)])
 
     system = """Sen bir felsefe editörüsün. Sana filozofun GERÇEK, doğrulanmış sözleri verilecek.
-Görev: Bu listeden konuya EN UYGUN ve EN GÜÇLÜ sözü seç, gerekirse Türkçeye çevir, formatla.
+Görev: Bu listeden konuya EN UYGUN ve EN GÜÇLÜ sözü seç, MUTLAKA Türkçeye çevir, formatla.
 
 KESİN KURALLAR:
 1. Listede OLMAYAN hiçbir söz yazma veya uydurma. Sadece verilen listeden seç.
-2. İngilizce sözleri akıcı Türkçeye çevir — anlamı DEĞİŞTİRME, sadece çevir.
-3. Çevirirken Türkçe karakterleri MUTLAKA kullan: ç, ş, ğ, ü, ö, ı, İ, Ğ, Ş, Ç, Ü, Ö
-4. Zaten Türkçe ise olduğu gibi bırak, karakterleri bozmadan koru.
+2. Söz hangi dilde olursa olsun (Almanca, İngilizce, Fransızca, Latince vb.) MUTLAKA akıcı Türkçeye çevir.
+3. Anlamı DEĞİŞTİRME, sadece çevir.
+4. Çeviride Türkçe karakterleri MUTLAKA kullan: ç, ş, ğ, ü, ö, ı, İ, Ğ, Ş, Ç, Ü, Ö
 5. SOZ alanında tırnak işareti (", ', «, ») KULLANMA.
-6. Hashtagleri # ile başlat, Türkçe karakter KULLANMA (o,u,s,c,i,g şeklinde yaz).
-7. TWITTER alanında sadece söz ve yazar olsun, hashtag YAZMA.
+6. SOZ alanında Almanca, İngilizce veya başka yabancı dil KULLANMA. Türkçe olmalı.
+7. Hashtagleri # ile başlat, Türkçe karakter KULLANMA (o,u,s,c,i,g şeklinde yaz).
+8. TWITTER alanında sadece Türkçe söz ve yazar adı olsun, hashtag YAZMA.
 
 Yanıtını TAM OLARAK bu formatta ver:
 
 SOZ:
-[Seçilen sözün Türkçe hali — tırnak YOK, Türkçe karakterler korunmuş, max 250 karakter]
+[Seçilen sözün TÜRKÇE hali — başka dil YASAK, tırnak YOK, max 250 karakter]
 ---
 YAZAR:
 [Filozofun adı]
@@ -1192,7 +1198,7 @@ ACIKLAMA:
 [Sözün 2-3 cümlelik Türkçe açıklaması — felsefi bağlamını anlat]
 ---
 TWITTER:
-[Söz tırnaksız — Yazar Adı]"""
+[Türkçe söz tırnaksız — Yazar Adı]"""
 
     import time
     for attempt in range(3):
@@ -1219,19 +1225,68 @@ TWITTER:
 
 
 def _is_turkish(text):
-    """Metnin Türkçe olup olmadığını kontrol eder."""
+    """Metnin Türkçe olup olmadığını kontrol eder. Almanca/İngilizce sözleri reddeder."""
+    if not text:
+        return False
+
+    # Türkçe karakterler varsa Türkçe olabilir — ama önce Almanca kontrol et
+    # Almanca da ä, ö, ü kullanır — önce Almanca kelimeleri kontrol et
+    almanca_kesin = {"der", "die", "das", "des", "dem", "den", "ein", "eine", "einer",
+                     "und", "oder", "aber", "nicht", "ist", "sind", "hat", "haben",
+                     "wird", "werden", "kann", "muss", "ich", "du", "er", "wir",
+                     "von", "zu", "auf", "für", "mit", "durch", "über", "nach",
+                     "lässt", "lasst", "böses", "seele", "geist", "mensch", "leben",
+                     "wahrheit", "welt", "tod", "weg", "sprache", "missbrauch"}
+    words_lower = set(text.lower().split())
+    # Almanca kelimeler varsa Türkçe değil
+    if len(words_lower & almanca_kesin) >= 2:
+        return False
+
+    # Şimdi Türkçe karakter kontrolü
     turkce_chars = set("çşğüöıÇŞĞÜÖİ")
-    turkce_words = {"ve", "bir", "bu", "da", "de", "ile", "için", "ama", "çünkü",
-                    "olan", "olan", "değil", "gibi", "kadar", "daha", "çok",
-                    "her", "biz", "ben", "sen", "onlar", "var", "yok", "ne"}
-    # Türkçe karakter içeriyorsa Türkçe
     if any(c in text for c in turkce_chars):
         return True
-    # Yaygın Türkçe kelimeler içeriyorsa Türkçe
+
+    # Yaygın Türkçe kelimeler
+    turkce_words = {"ve", "bir", "bu", "da", "de", "ile", "için", "ama",
+                    "olan", "değil", "gibi", "kadar", "daha", "çok",
+                    "her", "biz", "ben", "sen", "var", "yok", "ne",
+                    "hayat", "insan", "dünya", "zaman", "gerçek", "akıl",
+                    "bilgi", "ölüm", "güzel", "iyi", "kötü", "büyük",
+                    "küçük", "yalnız", "mutlu", "özgür", "sevgi"}
     words = set(text.lower().split())
     if len(words & turkce_words) >= 2:
         return True
-    return False
+
+    # Almanca kelimeleri yakala (reddedilmeli)
+    almanca_words = {"der", "die", "das", "des", "dem", "den", "ein", "eine", "einer",
+                     "und", "oder", "aber", "nicht", "ist", "sind", "hat", "haben",
+                     "wird", "werden", "kann", "muss", "ich", "du", "er", "sie", "wir",
+                     "von", "zu", "in", "an", "auf", "für", "mit", "durch", "über",
+                     "lässt", "lasst", "böses", "seele", "geist", "mensch", "leben",
+                     "wahrheit", "welt", "zeit", "tod", "weg"}
+    if len(words & almanca_words) >= 2:
+        return False
+
+    # İngilizce kelimeleri yakala (reddedilmeli)
+    ingilizce_words = {"the", "a", "an", "is", "are", "was", "were", "be", "been",
+                       "have", "has", "had", "do", "does", "did", "will", "would",
+                       "can", "could", "should", "may", "might", "must",
+                       "and", "or", "but", "not", "in", "on", "at", "to", "for",
+                       "of", "with", "by", "from", "that", "this", "it", "he",
+                       "she", "we", "they", "you", "i", "my", "your", "his", "her"}
+    if len(words & ingilizce_words) >= 3:
+        return False
+
+    # Fransızca/Latince kelimeleri yakala
+    diger_yabanci = {"les", "des", "une", "est", "sont", "dans", "pour", "avec",
+                     "que", "qui", "ce", "se", "ne", "pas", "plus", "très",
+                     "la", "le", "les", "du", "et", "ou", "mais",
+                     "et", "sed", "non", "est", "sunt", "vel", "aut"}
+    if len(words & diger_yabanci) >= 2:
+        return False
+
+    return False  # Bilinmeyen dil — reddet
 
 
 def _fallback_format(philosopher, akim, quotes_list):
