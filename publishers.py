@@ -5,7 +5,7 @@ from urllib.parse import quote as urlquote
 from image_generator import create_square_cover
 
 import anthropic
-import google.generativeai as genai
+from google import genai
 
 log = logging.getLogger(__name__)
 
@@ -23,10 +23,9 @@ except Exception as e:
     log.warning("Claude istemcisi baslatilamadi: %s" % e)
 
 try:
-    genai.configure(api_key=os.environ.get("GEMINI_API_KEY"))
-    gemini_model = genai.GenerativeModel('gemini-1.5-pro')
+    gemini_client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
 except Exception as e:
-    gemini_model = None
+    gemini_client = None
     log.warning("Gemini istemcisi baslatilamadi: %s" % e)
 
 
@@ -44,10 +43,13 @@ def _ai_generate(prompt, max_tokens=800):
         except Exception as e:
             log.warning("Claude API hatasi (Gemini'ye geciliyor...): %s" % e)
             
-    # 2. Gemini'yi Dene (Claude yoksa veya hata verdiyse)
-    if gemini_model:
+    # 2. Gemini'yi Dene (Yeni GenAI SDK)
+    if gemini_client:
         try:
-            response = gemini_model.generate_content(prompt)
+            response = gemini_client.models.generate_content(
+                model='gemini-2.0-flash',
+                contents=prompt,
+            )
             return response.text.strip()
         except Exception as e:
             log.error("Gemini API hatasi: %s" % e)
@@ -187,7 +189,6 @@ def _build_title(quote_data):
     return soz.rstrip(",.;:")
 
 def _build_content(quote_data):
-    """Syntax hatasına sebep olmaması için güvenli f-string yapısı kullanıldı."""
     soz = quote_data.get("quote", "")
     yazar = quote_data.get("author", "Anonim")
     akim = quote_data.get("akim", "Felsefe")
@@ -216,7 +217,6 @@ def _build_aciklama(quote_data):
 # WordPress Yükleme ve Silme
 # ---------------------------------------------------------------------------
 def post_to_wordpress(quote_data, post_img):
-    """Sözü, görseli ve makaleyi WordPress'e yükler."""
     if not WP_APP_PASS: return None, None, None
     yazar, akim, soz = quote_data.get("author", "Anonim"), quote_data.get("akim", "Felsefe"), quote_data.get("quote", "")
 
@@ -255,7 +255,6 @@ def post_to_wordpress(quote_data, post_img):
     return None, None, media_id
 
 def delete_from_wordpress(post_id, media_id=None):
-    """Telegram'daki 'Siteden Sil' butonuna basılınca yazıyı ve görseli siler."""
     deleted = []
     if post_id:
         try:
