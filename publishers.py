@@ -1,7 +1,9 @@
+# -*- coding: utf-8 -*-
 import os, logging, requests, re, time
 from pathlib import Path
 from urllib.parse import quote as urlquote
 from image_generator import create_square_cover
+
 import anthropic
 import google.generativeai as genai
 
@@ -11,7 +13,9 @@ WP_URL      = os.environ.get("WP_URL",      "https://felsefemiz.net")
 WP_USER     = os.environ.get("WP_USER",     "serezart")
 WP_APP_PASS = os.environ.get("WP_APP_PASS", "")
 
-# AI İstemcilerini Başlat
+# ---------------------------------------------------------------------------
+# AI İstemcilerini Başlat (Claude + Gemini Ortak Akıl)
+# ---------------------------------------------------------------------------
 try:
     claude_client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
 except Exception as e:
@@ -32,7 +36,7 @@ def _ai_generate(prompt, max_tokens=800):
     if claude_client:
         try:
             msg = claude_client.messages.create(
-                model="claude-sonnet-4-20250514", # Mevcut kullandığın model adı
+                model="claude-sonnet-4-20250514",
                 max_tokens=max_tokens,
                 messages=[{"role": "user", "content": prompt}]
             )
@@ -51,6 +55,9 @@ def _ai_generate(prompt, max_tokens=800):
     # 3. İkisi de çökerse
     return ""
 
+# ---------------------------------------------------------------------------
+# Yardımcı: WordPress Görsel Yükleme
+# ---------------------------------------------------------------------------
 def _upload_image(image_path, alt_text="", title="", caption="", description=""):
     if not image_path or not Path(image_path).exists(): return None
     try:
@@ -77,6 +84,9 @@ def _upload_image(image_path, alt_text="", title="", caption="", description="")
     except Exception:
         return None
 
+# ---------------------------------------------------------------------------
+# Filozof, Kategori ve Etiket İşlemleri
+# ---------------------------------------------------------------------------
 def _fetch_wikipedia(name):
     for lang in ("tr", "en"):
         try:
@@ -165,6 +175,9 @@ def _prepare_tags(quote_data):
         if extra and extra not in tags: tags.append(extra)
     return [_get_or_create_tag(tag) for tag in tags[:8] if _get_or_create_tag(tag)]
 
+# ---------------------------------------------------------------------------
+# İçerik Oluşturma Formatları
+# ---------------------------------------------------------------------------
 def _build_title(quote_data):
     soz = quote_data.get("quote", "").strip()
     if len(soz) > 80:
@@ -174,5 +187,102 @@ def _build_title(quote_data):
     return soz.rstrip(",.;:")
 
 def _build_content(quote_data):
-    soz, yazar, akim, hashtags = quote_data.get("quote", ""), quote_data.get("author", "Anonim"), quote_data.get("akim", "Felsefe"), quote_data.get("hashtags", "")
-    return '<blockquote class="wp-block-quote"><p><em>"%s"</em></p><cite>— %s | %s</cite></blockquote>\n\n<p class="felsefemiz-
+    """Syntax hatasına sebep olmaması için güvenli f-string yapısı kullanıldı."""
+    soz = quote_data.get("quote", "")
+    yazar = quote_data.get("author", "Anonim")
+    akim = quote_data.get("akim", "Felsefe")
+    hashtags = quote_data.get("hashtags", "")
+    
+    html_content = (
+        f'<blockquote class="wp-block-quote"><p><em>"{soz}"</em></p>'
+        f'<cite>— {yazar} | {akim}</cite></blockquote>\n\n'
+        f'<p class="felsefemiz-tags">{hashtags}</p>'
+    )
+    return html_content
+
+def _build_aciklama(quote_data):
+    soz, yazar, akim = quote_data.get("quote", ""), quote_data.get("author", "Anonim"), quote_data.get("akim", "Felsefe")
+    prompt = (
+        f"Sen derinlikli yazılar yazan bir felsefe editörüsün. Şu felsefi sözü son derece detaylı bir şekilde analiz et.\n\n"
+        f"Söz: '{soz}'\nYazar: {yazar}\nAkım: {akim}\n\n"
+        f"GÖREVİN: Bu sözün altında yatan felsefi derinliği, yazarın genel düşünce sistemi içindeki yerini ve günümüz dünyasındaki varoluşsal karşılığını incele. "
+        f"Okuyucuyu düşünmeye sevk eden, edebi bir dille yazılmış, EN AZ 3-4 UZUN PARAGRAFTAN oluşan çok kapsamlı bir makale oluştur. "
+        f"Kısa cevaplar verme; adeta bir felsefe dergisine başyazı hazırlıyormuşsun gibi derinlikli yaz."
+    )
+    editor = _ai_generate(prompt, max_tokens=1200)
+    return editor or quote_data.get("aciklama", f"{akim} felsefesinin bu sözü, modern insanın varoluşsal sorularına ışık tutmaktadır.")
+
+# ---------------------------------------------------------------------------
+# WordPress Yükleme ve Silme
+# ---------------------------------------------------------------------------
+def post_to_wordpress(quote_data, post_img):
+    """Sözü, görseli ve makaleyi WordPress'e yükler."""
+    if not WP_APP_PASS: return None, None, None
+    yazar, akim, soz = quote_data.get("author", "Anonim"), quote_data.get("akim", "Felsefe"), quote_data.get("quote", "")
+
+    wiki_raw, wiki_lang = _fetch_wikipedia(yazar)
+    filozof_id = _ensure_filozof(yazar, wiki_raw, wiki_lang)
+    cat_id = _ensure_category(akim)
+    tag_ids = _prepare_tags(quote_data)
+
+    media_id = _upload_image(post_img, alt_text="%s — %s" % (soz[:80], yazar), title="%s sözü" % yazar)
+    
+    post_data = {
+        "title": _build_title(quote_data),
+        "content": _build_content(quote_data),
+        "excerpt": soz[:160],
+        "status": "publish",
+        "categories": [cat_id] if cat_id else [],
+        "tags": tag_ids,
+        "filozof": [filozof_id] if filozof_id else [],
+        "acf": {
+            "felsefi_soz": soz,
+            "yazar": yazar,
+            "felsefi_akim": akim,
+            "aciklama": _build_aciklama(quote_data),
+            "twitter_text": quote_data.get("twitter", ""),
+        },
+    }
+    if media_id: post_data["featured_media"] = media_id
+
+    try:
+        r = requests.post("%s/wp-json/wp/v2/posts" % WP_URL, auth=(WP_USER, WP_APP_PASS), json=post_data, timeout=45)
+        if r.status_code in (200, 201):
+            resp = r.json()
+            return resp.get("link", ""), resp.get("id"), media_id
+    except Exception:
+        pass
+    return None, None, media_id
+
+def delete_from_wordpress(post_id, media_id=None):
+    """Telegram'daki 'Siteden Sil' butonuna basılınca yazıyı ve görseli siler."""
+    deleted = []
+    if post_id:
+        try:
+            r = requests.delete(
+                "%s/wp-json/wp/v2/posts/%s" % (WP_URL, post_id),
+                auth=(WP_USER, WP_APP_PASS),
+                params={"force": True},
+                timeout=15,
+            )
+            if r.status_code in (200, 201):
+                log.info("WP post silindi: %s" % post_id)
+                deleted.append("post:%s" % post_id)
+        except Exception as e:
+            log.error("Post silme hatasi: %s" % e)
+            
+    if media_id and media_id != 'None':
+        try:
+            r = requests.delete(
+                "%s/wp-json/wp/v2/media/%s" % (WP_URL, media_id),
+                auth=(WP_USER, WP_APP_PASS),
+                params={"force": True},
+                timeout=15,
+            )
+            if r.status_code in (200, 201):
+                log.info("WP media silindi: %s" % media_id)
+                deleted.append("media:%s" % media_id)
+        except Exception as e:
+            log.error("Media silme hatasi: %s" % e)
+            
+    return deleted
