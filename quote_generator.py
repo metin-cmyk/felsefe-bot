@@ -157,15 +157,14 @@ def _db_get_unused_quote():
     try:
         recent_authors = _load_recent_authors(15)
         recent_quotes  = _load_recent_quotes(30)
+        
+        # MariaDB LIMIT IN hatasını önlemek için basitleştirilmiş sorgu (Kalan elemeyi Python yapacak)
         rows = db_query(
             """SELECT s.id, s.filozof_ad, s.soz, s.akim, s.hashtags, s.aciklama, s.kaynak
                FROM sozler s
                WHERE s.dil = 'tr' AND s.dogrulanmis = 1 AND s.filozof_ad != 'Mustafa Kemal Atatürk'
-                 AND s.soz_ozet NOT IN (SELECT COALESCE(soz_ozet,'') FROM yayinlar ORDER BY yayinlandi_at DESC LIMIT 30)
                ORDER BY RAND() LIMIT 20"""
         )
-        if not rows:
-            rows = db_query("SELECT s.id, s.filozof_ad, s.soz, s.akim, s.hashtags, s.aciklama, s.kaynak FROM sozler s WHERE s.dil = 'tr' AND s.dogrulanmis = 1 AND s.filozof_ad != 'Mustafa Kemal Atatürk' ORDER BY RAND() LIMIT 10")
         
         if not rows: 
             return None
@@ -179,12 +178,7 @@ def _db_get_unused_quote():
                 "kaynak": row["kaynak"] or "", "twitter": row["soz"][:200] + " — " + row["filozof_ad"],
             }
             
-        row = rows[0]
-        return {
-            "quote": row["soz"], "author": row["filozof_ad"], "akim": row["akim"] or "Felsefe",
-            "hashtags": row["hashtags"] or "#Felsefe #Bilgelik", "aciklama": row["aciklama"] or "",
-            "kaynak": row["kaynak"] or "", "twitter": row["soz"][:200] + " — " + row["filozof_ad"],
-        }
+        return None
     except Exception as e:
         log.error("DB soz cekme hatasi: %s" % e)
         return None
@@ -231,6 +225,9 @@ def generate_quote():
 
     MAX_DENEME = 8
     for deneme in range(MAX_DENEME):
+        # API Kota Koruma: Peş peşe atılan sorgularda 429 hatası yememek için her denemede 3 saniye dinlen.
+        time.sleep(3) 
+
         if MULTI_SOURCE:
             real_quotes = fetch_all_quotes(filozof)
         else:
