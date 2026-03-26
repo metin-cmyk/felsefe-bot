@@ -2,11 +2,10 @@
 import os, re, random, logging, json, time
 from datetime import datetime
 from pathlib import Path
-
 import anthropic
 from google import genai
 
-# Çevirmen kütüphanesini içeri aktarıyoruz
+# Çevirmen kütüphanesi
 try:
     from deep_translator import GoogleTranslator
     TRANSLATOR_AVAILABLE = True
@@ -90,7 +89,8 @@ def _load_recent_authors(n=15):
             pass
     try:
         pf = Path("posted.json")
-        if not pf.exists(): return set()
+        if not pf.exists(): 
+            return set()
         posted = json.loads(pf.read_text(encoding="utf-8"))
         return set(p.get("author", "") for p in posted[-n:])
     except Exception:
@@ -106,7 +106,8 @@ def _load_recent_quotes(n=30):
             pass
     try:
         pf = Path("posted.json")
-        if not pf.exists(): return set()
+        if not pf.exists(): 
+            return set()
         posted = json.loads(pf.read_text(encoding="utf-8"))
         return set(p.get("quote", "")[:60] for p in posted[-n:])
     except Exception:
@@ -116,7 +117,8 @@ def _get_akimlar():
     if DB_AVAILABLE:
         try:
             rows = db_query("SELECT ad FROM akimlar ORDER BY RAND()")
-            if rows: return [r["ad"] for r in rows]
+            if rows: 
+                return [r["ad"] for r in rows]
         except Exception as e:
             pass
     return ["Stoacılık", "Varoluşçuluk", "Antik Yunan Felsefesi", "Budizm", "Rasyonalizm", "Empirizm", "Fenomenoloji", "Absürdizm", "Pragmatizm", "Nihilizm", "Taoizm"]
@@ -128,28 +130,34 @@ def _get_random_filozof(akim, exclude=None):
             rows = db_query("SELECT ad FROM filozoflar WHERE akim = %s ORDER BY RAND() LIMIT 20", (akim,))
             if rows:
                 candidates = [r["ad"] for r in rows if r["ad"] not in exclude]
-                if candidates: return random.choice(candidates)
+                if candidates: 
+                    return random.choice(candidates)
             rows2 = db_query("SELECT ad FROM filozoflar ORDER BY RAND() LIMIT 20")
             if rows2:
                 candidates2 = [r["ad"] for r in rows2 if r["ad"] not in exclude]
-                if candidates2: return random.choice(candidates2)
+                if candidates2: 
+                    return random.choice(candidates2)
         except Exception as e:
             pass
     _fallback_filozoflar = ["Sokrates", "Platon", "Aristoteles", "Marcus Aurelius", "Epiktetos", "Friedrich Nietzsche", "Albert Camus", "Jean-Paul Sartre", "Immanuel Kant", "Arthur Schopenhauer", "Seneca", "Epikür"]
     candidates = [f for f in _fallback_filozoflar if f not in exclude]
-    return random.choice(candidates) if candidates else "Sokrates"
+    if candidates:
+        return random.choice(candidates)
+    return "Sokrates"
 
 def _get_random_konu():
     if DB_AVAILABLE:
         try:
             row = db_query("SELECT konu FROM konular ORDER BY RAND() LIMIT 1", fetchone=True)
-            if row: return row["konu"]
+            if row: 
+                return row["konu"]
         except Exception as e:
             pass
     return random.choice(["Hayatın anlamı ve özgürlük", "Ölüm ve varoluş", "Aşk ve insan doğası", "Bilgi ve hakikat", "Ahlak ve erdem", "Toplum ve birey"])
 
 def _db_get_unused_quote():
-    if not DB_AVAILABLE: return None
+    if not DB_AVAILABLE: 
+        return None
     try:
         recent_authors = _load_recent_authors(15)
         recent_quotes  = _load_recent_quotes(30)
@@ -161,7 +169,8 @@ def _db_get_unused_quote():
                ORDER BY RAND() LIMIT 20"""
         )
         
-        if not rows: return None
+        if not rows: 
+            return None
 
         for row in rows:
             if row["filozof_ad"] in recent_authors or row["soz"][:60] in recent_quotes: 
@@ -176,7 +185,8 @@ def _db_get_unused_quote():
         return None
 
 def _db_save_quote(result):
-    if not DB_AVAILABLE or not result: return
+    if not DB_AVAILABLE or not result: 
+        return
     try:
         db_execute(
             """INSERT IGNORE INTO sozler (filozof_ad, soz, akim, hashtags, aciklama, dil, dogrulanmis, kaynak_site)
@@ -187,13 +197,41 @@ def _db_save_quote(result):
         pass
 
 # ---------------------------------------------------------------------------
+# DİL TESPİTİ (TAMAMEN GÜÇLENDİRİLDİ)
+# ---------------------------------------------------------------------------
+def _is_turkish(text):
+    if not text or len(text.strip()) < 3: 
+        return False
+    words = set(text.lower().split())
+    
+    # 1. İngilizce bariz kelimeler varsa DİREKT YABANCI say!
+    foreign_words = {"the","is","are","was","were","and","of","to","in","that","it","for","on","with","as","you","do","at","this","but","his","by","from","they","we","say","her","she","or","an","will","my","one","all","would","there","their","what","out","if","about","who","get","which","go","me"}
+    
+    # Eğer 2 tane bile İngilizce kelime yakalarsak İngilizcedir (Kesin Ret)
+    if len(words & foreign_words) >= 2:
+        return False
+
+    # 2. Türkçe'ye has karakterler varsa %99 Türkçedir
+    turkce_chars = set("çşğüöıÇŞĞÜÖİ")
+    if any(c in text for c in turkce_chars): 
+        return True
+
+    # 3. Yaygın Türkçe kelimeler
+    turkce_words = {"ve","bir","bu","da","de","ile","için","ama","çünkü","eğer","olan","değil","gibi","kadar","daha","çok","her","biz","ben","sen","var","yok","en","göre","sonra","olarak","kendi","hiç","ne","o","şu","diye","bile"}
+    if len(words & turkce_words) >= 1: 
+        return True
+        
+    return False
+
+# ---------------------------------------------------------------------------
 # ANA ÜRETİM FONKSİYONU
 # ---------------------------------------------------------------------------
 def generate_quote():
     bugun = datetime.now()
     if (bugun.month == 11 and bugun.day == 10) or (bugun.month == 10 and bugun.day == 29) or (bugun.month == 8 and bugun.day == 30) or (bugun.month == 5 and bugun.day == 19) or (bugun.month == 4 and bugun.day == 23) or random.random() < 0.20:
         ataturk_sozu = _get_ataturk_quote()
-        if ataturk_sozu: return ataturk_sozu
+        if ataturk_sozu: 
+            return ataturk_sozu
 
     db_result = _db_get_unused_quote()
     if db_result:
@@ -208,13 +246,14 @@ def generate_quote():
     for _ in range(20):
         akim = random.choice(akimlar_list)
         filozof = _get_random_filozof(akim, exclude=recent_authors)
-        if filozof not in recent_authors: break
+        if filozof not in recent_authors: 
+            break
             
     konu = _get_random_konu()
 
     MAX_DENEME = 8
     for deneme in range(MAX_DENEME):
-        time.sleep(2) # AI API Limit korumasi
+        time.sleep(2) 
 
         if MULTI_SOURCE:
             real_quotes = fetch_all_quotes(filozof)
@@ -223,7 +262,8 @@ def generate_quote():
 
         if real_quotes:
             filtered = [q for q in real_quotes if q[:60] not in recent_quotes]
-            if not filtered: filtered = real_quotes
+            if not filtered: 
+                filtered = real_quotes
 
             raw = _select_best_quote(filozof, akim, konu, filtered)
             result = _parse(raw, filozof, akim)
@@ -233,7 +273,7 @@ def generate_quote():
                     _db_save_quote(result)
                     return result
 
-        log.warning("Soz bulunamadi: %s (%d/%d)" % (filozof, deneme+1, MAX_DENEME))
+        log.warning("Soz bulunamadi veya Türkçe yapılamadı: %s (%d/%d)" % (filozof, deneme+1, MAX_DENEME))
         akim = random.choice(akimlar_list)
         filozof = _get_random_filozof(akim, exclude=recent_authors)
         konu = _get_random_konu()
@@ -244,8 +284,10 @@ def generate_quote():
 def _clean_quotes(text):
     text = text.strip()
     for q in ['\u201c', '\u201d', '\u2018', '\u2019', '"', "'"]:
-        if text.startswith(q): text = text[1:]
-        if text.endswith(q): text = text[:-1]
+        if text.startswith(q): 
+            text = text[1:]
+        if text.endswith(q): 
+            text = text[:-1]
     return text.strip()
 
 def _parse(text, default_autor, default_akim):
@@ -255,20 +297,50 @@ def _parse(text, default_autor, default_akim):
 
     quote = _clean_quotes(get("SOZ"))
     
-    if not quote or len(quote.strip()) < 5 or not _is_turkish(quote): 
+    if not quote or len(quote.strip()) < 5: 
+        return None
+
+    # ZORUNLU ÇEVİRİ AŞAMASI (Söz için)
+    if TRANSLATOR_AVAILABLE and not _is_turkish(quote):
+        try:
+            log.info("İngilizce söz tespit edildi, zorla çevriliyor...")
+            quote = GoogleTranslator(source='auto', target='tr').translate(quote)
+        except Exception as e:
+            log.warning("Söz çeviri hatasi: %s" % e)
+
+    # Hala Türkçe değilse hiç yayınlama iptal et
+    if not _is_turkish(quote):
         return None
 
     author = get("YAZAR")
-    if not author or "az bilinen" in author.lower(): author = default_autor
+    if not author or "az bilinen" in author.lower(): 
+        author = default_autor
     
+    # ZORUNLU ÇEVİRİ AŞAMASI (Açıklama için)
+    aciklama = get("ACIKLAMA")
+    if aciklama and TRANSLATOR_AVAILABLE and not _is_turkish(aciklama):
+        try:
+            log.info("İngilizce açıklama tespit edildi, zorla çevriliyor...")
+            aciklama = GoogleTranslator(source='auto', target='tr').translate(aciklama)
+        except:
+            pass
+            
+    # ZORUNLU ÇEVİRİ AŞAMASI (Twitter Metni için)
+    twitter_text = get("TWITTER") or f"{quote}\n\n— {author}"
+    if twitter_text and TRANSLATOR_AVAILABLE and not _is_turkish(twitter_text):
+        try:
+            twitter_text = GoogleTranslator(source='auto', target='tr').translate(twitter_text)
+        except:
+            pass
+
     return {
         "quote": quote, "author": author, "akim": get("AKIM") or default_akim,
-        "hashtags": get("HASHTAG") or "#Felsefe #Bilgelik", "aciklama": get("ACIKLAMA"),
-        "twitter": get("TWITTER") or f"{quote}\n\n— {author}"
+        "hashtags": get("HASHTAG") or "#Felsefe #Bilgelik", "aciklama": aciklama,
+        "twitter": twitter_text
     }
 
 # ---------------------------------------------------------------------------
-# AI SEÇİM FONKSİYONU (CLAUDE + GEMINI + GOOGLE TRANSLATE)
+# AI SEÇİM FONKSİYONU
 # ---------------------------------------------------------------------------
 def _select_best_quote(philosopher, akim, konu, quotes_list):
     quotes_text = "\n".join(["  %d. %s" % (i+1, q) for i, q in enumerate(quotes_list)])
@@ -301,7 +373,6 @@ TWITTER:
 
     prompt_content = f"Dusunur: {philosopher}\nAkim: {akim}\nKonu: {konu}\n\nGERCEK sozler listesi:\n{quotes_text}"
 
-    # 1. Claude'u Dene
     if claude_client:
         try:
             msg = claude_client.messages.create(
@@ -310,9 +381,8 @@ TWITTER:
             )
             return msg.content[0].text.strip()
         except Exception as e:
-            log.warning("Claude API hatasi: %s. Gemini'ye geciliyor..." % e)
+            pass
 
-    # 2. Gemini'yi Dene 
     if gemini_client:
         try:
             response = gemini_client.models.generate_content(
@@ -321,10 +391,9 @@ TWITTER:
             )
             return response.text.strip()
         except Exception as e:
-            log.warning("Gemini API hatasi: %s. Fallback'e geciliyor..." % e)
+            pass
 
-    # 3. YZ ÇÖKTÜYSE: GOOGLE TRANSLATE İLE LİMİTSİZ ÇEVİRİ VE MANUEL SEÇİM
-    log.warning("Her iki AI de basarisiz, Google Translate destekli manuel secim yapiliyor.")
+    # AI Patlarsa Manuel Çek (İçeride yine otomatik çevrilecek)
     result = _fallback_format(philosopher, akim, quotes_list)
     return result or ""
 
@@ -420,47 +489,22 @@ def _fetch_real_quotes_from_wikipedia(philosopher):
     if quotes: return quotes, "felsefe.gen.tr"
     return [], "none"
 
-def _is_turkish(text):
-    """Gereksiz katı kurallar kaldırıldı, sadece bariz yabancı diller engelleniyor."""
-    if not text or len(text.strip()) < 5: return False
-    words = set(text.lower().split())
-    
-    # Sadece İngilizce, Almanca, Fransızca'ya ait temel kelimeler çoksa reddet
-    foreign_checks = [
-        ({"the","is","are","was","were","and","of","to","in","that"}, 3),
-        ({"der","die","das","und","oder","ist"}, 2),
-        ({"le","la","les","une","est","et"}, 2),
-    ]
-    for word_set, threshold in foreign_checks:
-        if len(words & word_set) >= threshold: 
-            return False
-            
-    # Geri kalanını Türkçe kabul et (Özellikle çeviriden dönenleri)
-    return True
-
 def _fallback_format(philosopher, akim, quotes_list):
-    """Yapay Zeka çökerse: İngilizce sözü bulur, Google Translate ile otomatik Türkçeye çevirir."""
     if not quotes_list: 
         return ""
         
-    # En uygun uzunluktaki sözü seç
     quotes_list.sort(key=len)
     secim = re.sub(r'[""\u201c\u201d\u2018\u2019«»\']', "", quotes_list[0]).strip()[:250]
     
     if len(secim) < 15: 
         return ""
 
-    # Eğer seçilen söz yabancı dildeyse, Google Translate ile ÇEVİR!
-    if not _is_turkish(secim):
-        if TRANSLATOR_AVAILABLE:
-            try:
-                secim = GoogleTranslator(source='auto', target='tr').translate(secim)
-                log.info("Google Translate ile başarıyla çevrildi.")
-            except Exception as e:
-                log.warning("Ceviri hatasi: %s" % e)
-                return ""
-        else:
-            return "" # Çevirmen kurulamamışsa pas geç
+    # HER İHTİMALE KARŞI İLK AŞAMA ÇEVİRİSİ (ZORUNLU)
+    if TRANSLATOR_AVAILABLE:
+        try:
+            secim = GoogleTranslator(source='auto', target='tr').translate(secim)
+        except:
+            pass
 
     akim_tag = re.sub(r"[^a-zA-Z0-9]", "", akim.split("/")[0].strip())
     yt_tag = re.sub(r"[^a-zA-Z0-9]", "", (philosopher.split()[-1] if philosopher else "Felsefe"))
