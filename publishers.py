@@ -29,8 +29,8 @@ except Exception as e:
     log.warning("Gemini istemcisi baslatilamadi: %s" % e)
 
 
-def _ai_generate(prompt, max_tokens=2000):
-    """Önce Claude'u dener, hata verirse Gemini'ye geçer. 429 Kota hatasında bekler."""
+def _ai_generate(prompt, max_tokens=2500):
+    """Önce Claude'u dener, hata verirse Gemini'ye geçer. 429 Kota hatasında dakikalarca inatla bekler."""
     # 1. Claude'u Dene
     if claude_client:
         try:
@@ -43,9 +43,11 @@ def _ai_generate(prompt, max_tokens=2000):
         except Exception as e:
             log.warning("Claude API hatasi: %s" % e)
             
-    # 2. Gemini'yi Dene (Rate Limit Korumalı)
+    # 2. Gemini'yi Dene (Rate Limit - Uzun Bekleme Korumalı)
     if gemini_client:
-        for attempt in range(3): # 3 kere şansını dener
+        # Bekleme süreleri: 1. hata-> 65sn | 2. hata-> 130sn | 3. hata-> 180sn (Toplam > 6 dakika sabredebilir)
+        wait_times = [65, 130, 180] 
+        for attempt in range(len(wait_times) + 1):
             try:
                 response = gemini_client.models.generate_content(
                     model='gemini-2.0-flash',
@@ -54,10 +56,15 @@ def _ai_generate(prompt, max_tokens=2000):
                 return response.text.strip()
             except Exception as e:
                 err_str = str(e).lower()
-                # Eğer kota/limit (429) hatası yerse pes etme, 25 saniye bekle ve tekrar dene
+                # Eğer kota/limit (429) hatası yerse, belirlenen süre kadar bekle ve tekrar dene
                 if "429" in err_str or "quota" in err_str or "exhausted" in err_str:
-                    log.warning(f"Gemini API Kota Sınırı (429). 25 saniye bekleniyor... (Deneme {attempt+1}/3)")
-                    time.sleep(25)
+                    if attempt < len(wait_times):
+                        wait_s = wait_times[attempt]
+                        log.warning(f"Gemini API Kotası Doldu (429). {wait_s} saniye bekleniyor... Lütfen sabredin. (Deneme {attempt+1})")
+                        time.sleep(wait_s)
+                    else:
+                        log.error("Tüm uzun beklemelere rağmen Gemini API kotası aşıldı.")
+                        break
                 else:
                     log.error("Gemini API genel hatasi: %s" % e)
                     break
