@@ -1,4 +1,9 @@
 import os, json, logging, schedule, time, threading, queue
+try:
+    from db import execute as db_execute, test_connection
+    DB_AVAILABLE = True
+except ImportError:
+    DB_AVAILABLE = False
 from pathlib import Path
 from datetime import datetime
 from flask import Flask
@@ -126,21 +131,39 @@ def _do_publish(quote_data, post_img, story_img):
 # ---------------------------------------------------------------------------
 
 def _save_posted(quote_data, url, post_id, media_id):
+    # 1. DB'ye kaydet
+    if DB_AVAILABLE:
+        try:
+            db_execute(
+                "INSERT INTO yayinlar (filozof_ad, soz_ozet, wp_post_id, wp_media_id, wp_url) "
+                "VALUES (%s, %s, %s, %s, %s)",
+                (
+                    quote_data.get("author", ""),
+                    quote_data.get("quote", "")[:60],
+                    post_id,
+                    media_id,
+                    url,
+                )
+            )
+            log.info("DB'ye kaydedildi: %s" % quote_data.get("author", ""))
+        except Exception as e:
+            log.error("DB kayit hatasi: %s" % e)
+    # 2. Yedek: posted.json da tut
     try:
         posted = []
         if POSTED_FILE.exists():
             posted = json.loads(POSTED_FILE.read_text(encoding="utf-8"))
         posted.append({
-            "quote":      quote_data["quote"],
-            "author":     quote_data["author"],
-            "time":       datetime.now().isoformat(),
-            "wp_url":     url,
-            "post_id":    post_id,
-            "media_id":   media_id,
+            "quote":    quote_data["quote"],
+            "author":   quote_data["author"],
+            "time":     datetime.now().isoformat(),
+            "wp_url":   url,
+            "post_id":  post_id,
+            "media_id": media_id,
         })
         POSTED_FILE.write_text(json.dumps(posted, ensure_ascii=False, indent=2), encoding="utf-8")
     except Exception as e:
-        log.error("Kayit hatasi: %s" % e)
+        log.error("JSON kayit hatasi: %s" % e)
 
 # ---------------------------------------------------------------------------
 # Üretim — sadece üretir, kuyruğa ekler
@@ -183,6 +206,13 @@ def run():
 
 def main():
     log.info("Felsefemiz Bot basliyor...")
+
+    # DB bağlantısını test et
+    if DB_AVAILABLE:
+        if test_connection():
+            log.info("Veritabani baglantisi basarili!")
+        else:
+            log.warning("Veritabani baglantisi basarisiz — Python listesiyle devam edilecek.")
     
     # 1. Ping sunucusunu başlat
     keep_alive()
