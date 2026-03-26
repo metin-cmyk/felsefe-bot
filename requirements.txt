@@ -9,3 +9,9 @@ schedule
 requests
 Pillow
 anthropic
+anthropic>=0.40.0
+schedule>=1.2.0
+requests>=2.31.0
+Pillow>=10.0.0
+flask
+pymysql>=1.1.0
