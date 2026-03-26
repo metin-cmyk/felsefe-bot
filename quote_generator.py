@@ -18,6 +18,13 @@ except ImportError:
 
 log = logging.getLogger(__name__)
 
+# Anthropic client — hata olursa None, fallback devreye girer
+try:
+    client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
+except Exception as _e:
+    client = None
+    log.warning("Anthropic client baslatılamadı: %s" % _e)
+
 # ---------------------------------------------------------------------------
 # Atatürk — Sadece doğrulanmış, kaynaklarda belgelenmiş sözler
 # Kaynak: Nutuk, TBMM tutanakları, Atatürk'ün Söylev ve Demeçleri
@@ -764,4 +771,3 @@ def _fallback_format(philosopher, akim, quotes_list):
     return """SOZ:\n%s\n---\nYAZAR:\n%s\n---\nAKIM:\n%s\n---\nHASHTAG:\n%s\n---\nACIKLAMA:\n%s'nin felsefi düşüncesinden önemli bir gözlem.\n---\nTWITTER:\n%s — %s""" % (
         secim, philosopher, akim, hashtags, philosopher, secim, philosopher
     )
-
