@@ -1,111 +1,87 @@
 # -*- coding: utf-8 -*-
 """
-Veritabanı bağlantı modülü — felsefemiz.net
-Railway env variables üzerinden bağlanır.
+Telegram Bot Ana Dosyası — Felsefemiz.net
+/yeni komutuyla söz üretir, görsel oluşturur ve WordPress'e atar.
 """
-import os, logging, time
-import pymysql
-import pymysql.cursors
+import os, time, logging, threading
+import telebot
+import schedule
 
+from quote_generator import generate_quote
+from image_generator import create_post_image
+from publishers import post_to_wordpress
+
+# Log ayarları
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 log = logging.getLogger(__name__)
 
-def _get_db_config():
-    """DB bağlantı ayarlarını environment variables'dan al."""
-    host     = os.environ.get("DB_HOST",     "mt-pony.guzelhosting.com")
-    port     = int(os.environ.get("DB_PORT", "3306"))
-    user     = os.environ.get("DB_USER",     "sere6176_felsefemizdata")
-    password = os.environ.get("DB_PASSWORD", "NeMutluTürkümDiyene@1923")
-    dbname   = os.environ.get("DB_NAME",     "sere6176_felsefemizdata")
-    return {
-        "host":        host,
-        "port":        port,
-        "user":        user,
-        "password":    password,
-        "db":          dbname,
-        "charset":     "utf8mb4",
-        "cursorclass": pymysql.cursors.DictCursor,
-        "connect_timeout": 15,
-        "read_timeout":    30,
-        "write_timeout":   30,
-        "autocommit":  True,
-        "ssl_disabled": True,  # cPanel MySQL SSL gerektirmez
-    }
+# Railway Environment Variables
+TOKEN = os.environ.get("TELEGRAM_TOKEN")
+CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 
-DB_CONFIG = _get_db_config()
+if not TOKEN:
+    log.error("TELEGRAM_TOKEN bulunamadı! Bot çalıştırılamıyor.")
+    exit(1)
 
-_conn = None
+bot = telebot.TeleBot(TOKEN)
 
-def get_conn():
-    """Bağlantı al — kopuksa yeniden bağlan."""
-    global _conn
+@bot.message_handler(commands=['start', 'help'])
+def send_welcome(message):
+    bot.reply_to(message, "Felsefemiz Bot aktif! 🏛️\nYeni söz üretmek ve siteye eklemek için /yeni komutunu kullanabilirsin.")
+
+@bot.message_handler(commands=['yeni'])
+def handle_yeni(message):
+    # Eğer CHAT_ID tanımlıysa ve komut başka yerden gelirse reddet (Güvenlik)
+    if CHAT_ID and str(message.chat.id) != str(CHAT_ID):
+        bot.reply_to(message, "Yetkisiz kullanım.")
+        return
+
+    bot.reply_to(message, "⏳ Felsefi söz üretiliyor, görsel hazırlanıyor ve WordPress'e yükleniyor. Bu işlem 1-2 dakika sürebilir...")
+    
     try:
-        if _conn and _conn.open:
-            _conn.ping(reconnect=True)
-            return _conn
-    except Exception:
-        _conn = None
-    try:
-        cfg = _get_db_config()  # Her bağlantıda env'den taze oku
-        _conn = pymysql.connect(**cfg)
-        log.info("DB bağlantısı kuruldu: %s@%s/%s" % (
-            cfg["user"], cfg["host"], cfg["db"]))
-        return _conn
-    except pymysql.err.OperationalError as e:
-        errno = e.args[0] if e.args else 0
-        if errno == 1045:
-            log.error("DB Erisim reddedildi (1045) — kullanici/sifre yanlis!")
-        elif errno == 2003:
-            log.error("DB baglanti zaman asimi (2003) — host/port kontrol edin: %s:%s" % (
-                os.environ.get("DB_HOST","?"), os.environ.get("DB_PORT","?")))
+        # 1. Sözü Üret
+        quote_data = generate_quote()
+        if not quote_data:
+            bot.send_message(message.chat.id, "❌ Uygun bir söz üretilemedi. Logları kontrol et.")
+            return
+
+        # 2. Görseli Oluştur
+        post_img, palette = create_post_image(quote_data)
+        
+        # 3. WordPress'e Yükle
+        url, post_id, media_id = post_to_wordpress(quote_data, post_img)
+
+        # 4. Sonucu Telegram'a Bildir
+        if url:
+            msg = f"✅ **Yeni Söz Başarıyla Yayınlandı!**\n\n"
+            msg += f"👤 *Yazar:* {quote_data.get('author')}\n"
+            msg += f"📜 *Söz:* {quote_data.get('quote')[:80]}...\n\n"
+            msg += f"🔗 [Sitede Gör]({url})"
+            
+            # Görseli de Telegram'dan gönder
+            with open(post_img, 'rb') as photo:
+                bot.send_photo(message.chat.id, photo, caption=msg, parse_mode='Markdown')
         else:
-            log.error("DB baglanti hatasi (%s): %s" % (errno, e))
-        return None
+            bot.send_message(message.chat.id, "⚠️ Söz üretildi ve görsel hazırlandı ancak WordPress'e yüklenirken bir sorun oluştu.")
+
     except Exception as e:
-        log.error("DB beklenmedik hata: %s" % e)
-        return None
+        log.error("Bot /yeni komutu hatası: %s" % e, exc_info=True)
+        bot.send_message(message.chat.id, f"❌ Kritik bir hata oluştu:\n{str(e)}")
 
-def query(sql, params=None, fetchone=False):
-    """SELECT sorgusu — liste veya tek satır döner."""
-    for attempt in range(3):
-        conn = get_conn()
-        if not conn:
-            time.sleep(2)
-            continue
-        try:
-            with conn.cursor() as cur:
-                cur.execute(sql, params or ())
-                return cur.fetchone() if fetchone else cur.fetchall()
-        except pymysql.OperationalError:
-            _conn = None
-            time.sleep(2)
-        except Exception as e:
-            log.error("DB query hatası: %s | SQL: %s" % (e, sql[:100]))
-            return None
-    return None
+def run_scheduler():
+    """Otomatik zamanlanmış görevleri çalıştıran döngü"""
+    while True:
+        schedule.run_pending()
+        time.sleep(1)
 
-def execute(sql, params=None):
-    """INSERT/UPDATE/DELETE — lastrowid döner."""
-    for attempt in range(3):
-        conn = get_conn()
-        if not conn:
-            time.sleep(2)
-            continue
-        try:
-            with conn.cursor() as cur:
-                cur.execute(sql, params or ())
-                return cur.lastrowid
-        except pymysql.OperationalError:
-            _conn = None
-            time.sleep(2)
-        except Exception as e:
-            log.error("DB execute hatası: %s | SQL: %s" % (e, sql[:100]))
-            return None
-    return None
-
-def test_connection():
-    """Bağlantıyı test et."""
-    result = query("SELECT COUNT(*) as c FROM akimlar", fetchone=True)
-    if result:
-        log.info("DB test OK — akimlar: %d" % result["c"])
-        return True
-    return False
+if __name__ == '__main__':
+    log.info("Telegram Bot başlatılıyor...")
+    
+    # Eğer günde 1 kere otomatik paylaşım istersen aşağıdaki satırın başındaki '#' işaretini kaldırıp düzenleyebilirsin:
+    # schedule.every().day.at("10:00").do(lambda: handle_yeni(type('obj', (object,), {'chat': type('obj', (object,), {'id': CHAT_ID})()})))
+    
+    # Zamanlayıcıyı ayrı bir thread'de (arka planda) başlat
+    threading.Thread(target=run_scheduler, daemon=True).start()
+    
+    # Botu sürekli dinleme modunda tut
+    bot.infinity_polling(timeout=10, long_polling_timeout=5)
